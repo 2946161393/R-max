@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 export default function FamilyDashboard() {
   const [user, setUser] = useState<any>(null)
@@ -30,20 +31,23 @@ export default function FamilyDashboard() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    router.push('/login')
+    router.push('/')
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-[#FAFCFF]">
       <div className="text-gray-400">Loading...</div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#FAFCFF]">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="text-xl font-bold text-blue-600">Ruah</div>
+      <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img src="/ruah-logo.png" alt="Ruah" className="w-8 h-8" />
+          <span className="text-lg font-bold text-[#7FB3FF]">Ruah！</span>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">👋 {user?.full_name}</span>
           <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
@@ -54,36 +58,40 @@ export default function FamilyDashboard() {
         {/* Welcome */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Welcome, {user?.full_name?.split(' ')[0]}! 👨‍👩‍👧</h1>
-          <p className="text-gray-500 mt-1">Find the perfect care for your family</p>
+          <p className="text-gray-400 mt-1">Find the perfect care for your family</p>
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-6">
           <button
             onClick={() => router.push('/family/post')}
-            className="bg-blue-600 text-white p-6 rounded-2xl text-left hover:bg-blue-700 transition"
+            className="p-6 rounded-2xl text-left transition"
+            style={{
+              background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)',
+              boxShadow: '0 8px 32px rgba(127, 179, 255, 0.3)'
+            }}
           >
             <div className="text-2xl mb-2">✍️</div>
-            <div className="font-semibold">Post a Request</div>
-            <div className="text-sm text-blue-200 mt-1">Tell us what you need</div>
+            <div className="font-semibold text-white">Post a Request</div>
+            <div className="text-sm text-white/70 mt-1">Tell us what you need</div>
           </button>
           <button
             onClick={() => router.push('/search')}
-            className="bg-white border border-gray-200 p-6 rounded-2xl text-left hover:border-blue-300 transition"
+            className="bg-white border border-gray-200 p-6 rounded-2xl text-left hover:border-[#7FB3FF] transition"
           >
             <div className="text-2xl mb-2">🔍</div>
             <div className="font-semibold text-gray-900">Browse Caregivers</div>
-            <div className="text-sm text-gray-500 mt-1">Search by service & location</div>
+            <div className="text-sm text-gray-400 mt-1">Search by service & location</div>
           </button>
         </div>
 
         {/* My Requests */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-4">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">My Requests</h2>
             <button
               onClick={() => router.push('/family/post')}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-[#7FB3FF] hover:underline"
             >
               + New
             </button>
@@ -94,17 +102,20 @@ export default function FamilyDashboard() {
           </div>
         </div>
 
-        {/* AI Assistant Teaser */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-2xl p-6">
+        {/* AI Assistant */}
+        <div className="bg-gradient-to-br from-[#EAF4FF] to-[#FFF6F2] rounded-2xl p-6 border border-blue-50">
           <div className="flex items-start gap-4">
-            <div className="text-3xl">🤖</div>
+            <img src="/ruah-logo.png" alt="Ruah" className="w-12 h-12 flex-shrink-0" />
             <div>
-              <div className="font-semibold text-gray-900">AI Care Assistant</div>
+              <div className="font-semibold text-gray-900">Hi, I'm Ruah! Your AI Assistant ✨</div>
               <div className="text-sm text-gray-500 mt-1">
-                Let AI help you write your job post, find the best matches, and prepare interview questions.
+                Let me help you write your job post, find the best matches, and prepare interview questions.
               </div>
-              <button className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
-                Try it →
+              <button
+                className="mt-3 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
+                style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
+              >
+                Chat with Ruah →
               </button>
             </div>
           </div>

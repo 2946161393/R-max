@@ -21,7 +21,7 @@ export default function Home() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src="/ruah-logo.png" alt="Ruah" className="w-9 h-9" />
-            <span className="text-xl font-bold text-[#7FB3FF]">Ruah</span>
+            <span className="text-xl font-bold text-[#7FB3FF]">Ruah！</span>
           </div>
           <div className="flex items-center gap-4">
             <button onClick={() => router.push('/login')} className="text-sm text-gray-500 hover:text-gray-800 transition">Sign in</button>
@@ -71,7 +71,7 @@ export default function Home() {
                       <img src="/ruah-logo.png" alt="Ruah" className="w-36 h-36 mx-auto" />
                     </div>
                     <div className="bg-white/80 backdrop-blur px-4 py-2 rounded-2xl shadow-sm text-sm font-medium text-gray-700">
-                      Hi! I'm Ruah 👋
+                      Hi! I'm Ruah! 👋
                     </div>
                   </div>
                 </div>
@@ -196,9 +196,9 @@ export default function Home() {
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <img src="/ruah-logo.png" alt="Ruah" className="w-7 h-7" />
-            <span className="text-[#7FB3FF] font-bold">Ruah</span>
+            <span className="text-[#7FB3FF] font-bold">Ruah！</span>
           </div>
-          <div className="text-gray-400 text-sm">© 2025 Ruah. All rights reserved.</div>
+          <div className="text-gray-400 text-sm">© 2025 Ruah! All rights reserved.</div>
           <div className="flex gap-6 text-sm text-gray-400">
             <span className="hover:text-gray-600 cursor-pointer">Privacy</span>
             <span className="hover:text-gray-600 cursor-pointer">Terms</span>
