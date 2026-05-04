@@ -1,54 +1,224 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
 export default function Home() {
-  const [role, setRole] = useState<'family' | 'caregiver' | null>(null)
   const router = useRouter()
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20)
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-12">
-          <div className="text-4xl font-bold text-blue-600 mb-2">Ruah</div>
-          <p className="text-gray-500 text-lg">Find the right help for your home</p>
+    <div className="min-h-screen bg-[#FAFCFF] font-sans">
+
+      {/* NAV */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur shadow-sm' : 'bg-transparent'}`}>
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="text-xl font-bold text-[#4A90D9]">Ruah 🐻</div>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/login')} className="text-sm text-gray-500 hover:text-gray-800 transition">Sign in</button>
+            <button onClick={() => router.push('/onboarding/family')}
+              className="bg-[#7FB3FF] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[#6BA3EF] transition">
+              Get started
+            </button>
+          </div>
         </div>
+      </nav>
 
-        {/* Role Selection */}
-        <p className="text-center text-gray-700 font-medium mb-6">I am a...</p>
+      {/* HERO */}
+      <section className="pt-32 pb-20 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-[#EAF4FF] text-[#4A90D9] text-xs font-medium px-3 py-1.5 rounded-full mb-6">
+                ✨ AI-powered family care
+              </div>
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">
+                Find trusted care<br />
+                for your family —<br />
+                <span className="text-[#7FB3FF]">without the stress.</span>
+              </h1>
+              <p className="text-gray-500 text-lg mb-8 leading-relaxed">
+                We match your family with the right caregiver automatically. From childcare to private chefs — care that feels right.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button onClick={() => router.push('/onboarding/family')}
+                  className="bg-[#7FB3FF] text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-[#6BA3EF] transition shadow-lg shadow-blue-100">
+                  Find a caregiver →
+                </button>
+                <button onClick={() => router.push('/onboarding/caregiver')}
+                  className="border-2 border-gray-200 text-gray-600 px-8 py-4 rounded-2xl font-semibold text-lg hover:border-[#7FB3FF] hover:text-[#7FB3FF] transition">
+                  I'm a caregiver
+                </button>
+              </div>
+              <p className="text-gray-400 text-sm mt-4">✓ Free to browse &nbsp; ✓ Verified caregivers &nbsp; ✓ No commitment</p>
+            </div>
 
-        <div className="space-y-4">
-          <button
-            onClick={() => router.push('/onboarding/family')}
-            className="w-full border-2 border-gray-200 rounded-2xl p-6 text-left hover:border-blue-500 hover:bg-blue-50 transition group"
-          >
-            <div className="text-3xl mb-2">👨‍👩‍👧</div>
-            <div className="font-semibold text-gray-900 text-lg group-hover:text-blue-600">Family</div>
-            <div className="text-gray-500 text-sm mt-1">I'm looking for care services</div>
-          </button>
+            {/* Hero Visual */}
+            <div className="relative flex items-center justify-center">
+              <div className="relative w-80 h-80">
+                {/* Background blob */}
+                <div className="absolute inset-0 bg-gradient-to-br from-[#EAF4FF] to-[#FFF6F2] rounded-full opacity-60" />
 
-          <button
-            onClick={() => router.push('/onboarding/caregiver')}
-            className="w-full border-2 border-gray-200 rounded-2xl p-6 text-left hover:border-blue-500 hover:bg-blue-50 transition group"
-          >
-            <div className="text-3xl mb-2">🤝</div>
-            <div className="font-semibold text-gray-900 text-lg group-hover:text-blue-600">Caregiver / Helper</div>
-            <div className="text-sm text-gray-500 mt-1">I provide care services</div>
-          </button>
+                {/* Floating bear mascot */}
+                <div className="absolute inset-0 flex items-center justify-center animate-float">
+                  <div className="text-center">
+                    <div className="text-8xl mb-2" style={{ filter: 'drop-shadow(0 8px 24px rgba(127,179,255,0.3))' }}>🐻</div>
+                    <div className="bg-white/80 backdrop-blur px-4 py-2 rounded-2xl shadow-sm text-sm font-medium text-gray-700">
+                      Hi! I'm Ruah 👋
+                    </div>
+                  </div>
+                </div>
+
+                {/* Floating cards */}
+                <div className="absolute -top-2 -right-4 bg-white rounded-2xl shadow-md p-3 animate-float-slow">
+                  <div className="text-xs text-gray-500">Match found! 🎉</div>
+                  <div className="text-sm font-semibold text-gray-800">Sarah Chen</div>
+                  <div className="text-xs text-[#7FB3FF]">⭐ 4.9 · Mandarin speaker</div>
+                </div>
+
+                <div className="absolute -bottom-2 -left-4 bg-white rounded-2xl shadow-md p-3 animate-float-delay">
+                  <div className="text-xs text-gray-500 mb-1">Background check</div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-400 rounded-full" />
+                    <div className="text-xs font-medium text-green-600">Verified ✓</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <p className="text-center text-sm text-gray-400 mt-8">
-          Already have an account?{' '}
-          <span
-            onClick={() => router.push('/login')}
-            className="text-blue-600 cursor-pointer hover:underline"
-          >
-            Sign in
-          </span>
-        </p>
-      </div>
+      {/* HOW IT WORKS */}
+      <section className="py-20 px-6 bg-white">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-3">How Ruah works</h2>
+          <p className="text-gray-400 mb-14">Simple, fast, and stress-free</p>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              { step: '01', emoji: '💬', title: 'Tell us your needs', desc: 'Answer a few quick questions about your family and what kind of help you\'re looking for.' },
+              { step: '02', emoji: '🤝', title: 'We find your match', desc: 'Our AI reviews caregivers based on your schedule, language, budget, and preferences.' },
+              { step: '03', emoji: '✨', title: 'Meet & hire', desc: 'Connect with your top matches, chat, and hire — all in one place.' },
+            ].map(item => (
+              <div key={item.step} className="relative">
+                <div className="text-xs font-bold text-[#7FB3FF] mb-4 tracking-widest">{item.step}</div>
+                <div className="text-4xl mb-4">{item.emoji}</div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">{item.title}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SERVICES */}
+      <section className="py-20 px-6 bg-[#FAFCFF]">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-14">
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">Care for every need</h2>
+            <p className="text-gray-400">From daily help to special occasions</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {[
+              { emoji: '👶', label: 'Childcare', desc: 'Nannies & babysitters', color: 'bg-blue-50' },
+              { emoji: '🍳', label: 'Private Chef', desc: 'Meal prep & cooking', color: 'bg-orange-50' },
+              { emoji: '🏠', label: 'Housekeeper', desc: 'Cleaning & organizing', color: 'bg-green-50' },
+              { emoji: '👴', label: 'Elder Care', desc: 'Companion & support', color: 'bg-purple-50' },
+              { emoji: '🐾', label: 'Pet Care', desc: 'Walking & sitting', color: 'bg-yellow-50' },
+              { emoji: '📚', label: 'Learning Support', desc: 'Tutoring & mentoring', color: 'bg-pink-50' },
+            ].map(s => (
+              <button key={s.label} onClick={() => router.push('/onboarding/family')}
+                className={`${s.color} p-6 rounded-2xl text-left hover:scale-[1.02] transition-transform`}>
+                <div className="text-3xl mb-3">{s.emoji}</div>
+                <div className="font-semibold text-gray-900 text-sm">{s.label}</div>
+                <div className="text-xs text-gray-400 mt-1">{s.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TRUST */}
+      <section className="py-20 px-6 bg-white">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-14">
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">Safety you can count on</h2>
+            <p className="text-gray-400">Every caregiver on Ruah is carefully vetted</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { emoji: '🔍', title: 'Background checks', desc: 'Every caregiver goes through a thorough background and identity verification process.' },
+              { emoji: '⭐', title: 'Verified reviews', desc: 'Real ratings from real families. No fake reviews, ever.' },
+              { emoji: '🛡', title: 'Safe messaging', desc: 'All communication happens securely within the Ruah platform.' },
+            ].map(item => (
+              <div key={item.title} className="bg-[#FAFCFF] rounded-2xl p-6">
+                <div className="text-3xl mb-4">{item.emoji}</div>
+                <h3 className="font-bold text-gray-900 mb-2">{item.title}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-20 px-6">
+        <div className="max-w-2xl mx-auto text-center">
+          <div className="bg-gradient-to-br from-[#EAF4FF] to-[#FFF6F2] rounded-3xl p-12">
+            <div className="text-5xl mb-4">🐻</div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Ready to find your perfect match?
+            </h2>
+            <p className="text-gray-500 mb-8">Get started in minutes. No credit card required.</p>
+            <button onClick={() => router.push('/onboarding/family')}
+              className="bg-[#7FB3FF] text-white px-10 py-4 rounded-2xl font-semibold text-lg hover:bg-[#6BA3EF] transition shadow-lg shadow-blue-100">
+              Find care for my family →
+            </button>
+            <p className="text-gray-400 text-sm mt-4">Are you a caregiver?{' '}
+              <span onClick={() => router.push('/onboarding/caregiver')} className="text-[#7FB3FF] cursor-pointer hover:underline">
+                Join here
+              </span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="py-10 px-6 border-t border-gray-100">
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="text-[#4A90D9] font-bold">Ruah 🐻</div>
+          <div className="text-gray-400 text-sm">© 2025 Ruah. All rights reserved.</div>
+          <div className="flex gap-6 text-sm text-gray-400">
+            <span className="hover:text-gray-600 cursor-pointer">Privacy</span>
+            <span className="hover:text-gray-600 cursor-pointer">Terms</span>
+            <span className="hover:text-gray-600 cursor-pointer">Contact</span>
+          </div>
+        </div>
+      </footer>
+
+      <style jsx global>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+        }
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-6px); }
+        }
+        @keyframes float-delay {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .animate-float-slow { animation: float-slow 4s ease-in-out infinite; }
+        .animate-float-delay { animation: float-delay 3.5s ease-in-out infinite 0.5s; }
+      `}</style>
     </div>
   )
 }
