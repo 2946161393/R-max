@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 
 export default function FamilyDashboard() {
   const [user, setUser] = useState<any>(null)
@@ -46,7 +45,7 @@ export default function FamilyDashboard() {
       <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img src="/ruah-logo.png" alt="Ruah" className="w-8 h-8" />
-          <span className="text-lg font-bold text-[#7FB3FF]">Ruah！</span>
+          <span className="text-lg font-bold text-[#7FB3FF]">Ruah!</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">👋 {user?.full_name}</span>
@@ -112,10 +111,11 @@ export default function FamilyDashboard() {
                 Let me help you write your job post, find the best matches, and prepare interview questions.
               </div>
               <button
+                onClick={() => router.push('/family/chat')}
                 className="mt-3 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
                 style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
               >
-                Chat with Ruah →
+                Chat with Ruah! →
               </button>
             </div>
           </div>
