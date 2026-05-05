@@ -40,15 +40,16 @@ export default function CaregiverOnboarding() {
   const next = (current: string) => {
     const idx = STEPS.indexOf(current)
     if (idx < STEPS.length - 1) setStep(STEPS[idx + 1])
-    else {
-      router.push(`/onboarding/register?role=caregiver&answers=${encodeURIComponent(JSON.stringify({ ...answers, services: selectedServices }))}`)
-    }
   }
 
   const back = (current: string) => {
     const idx = STEPS.indexOf(current)
     if (idx > 0) setStep(STEPS[idx - 1])
     else router.push('/')
+  }
+
+  const goToRegister = (finalAnswers: Answers) => {
+    router.push(`/onboarding/register?role=caregiver&answers=${encodeURIComponent(JSON.stringify({ ...finalAnswers, services: selectedServices }))}`)
   }
 
   return (
@@ -212,7 +213,7 @@ export default function CaregiverOnboarding() {
           </div>
         )}
 
-        {/* Step: 价格 */}
+        {/* Step: 价格 — 直接用 goToRegister 避免 setState 异步问题 */}
         {step === 'rate' && (
           <div>
             <button onClick={() => back('rate')} className="text-gray-400 text-sm mb-8 hover:text-gray-600">← Back</button>
@@ -228,7 +229,7 @@ export default function CaregiverOnboarding() {
               ].map(opt => (
                 <button
                   key={opt.id}
-                  onClick={() => { save('rate', opt.id); next('rate') }}
+                  onClick={() => goToRegister({ ...answers, rate: opt.id })}
                   className={`w-full p-4 rounded-2xl border-2 text-left transition ${
                     answers.rate === opt.id
                       ? 'border-blue-500 bg-blue-50'

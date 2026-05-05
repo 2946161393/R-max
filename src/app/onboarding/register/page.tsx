@@ -42,15 +42,18 @@ function RegisterForm() {
         })
         router.push('/family/dashboard')
       } else {
-        const rateMin = answers.rate
-          ? Number(answers.rate.split('–')[0].replace('$', '').trim())
-          : null
+        const rateStr = answers.rate || ''
+        const rateParts = rateStr.replace(/\$/g, '').split('–')
+        const rateMin = rateParts[0] ? Number(rateParts[0].trim()) : null
+        const rateMax = rateParts[1] ? Number(rateParts[1].trim()) : null
+
         await supabase.from('caregiver_profiles').insert({
           user_id: data.user.id,
           services: answers.services || [],
           languages: answers.languages || [],
           years_experience: Number(answers.experience) || 0,
           hourly_rate_min: rateMin,
+          hourly_rate_max: rateMax,
           onboarding_answers: answers,
         })
         router.push('/caregiver/dashboard')
