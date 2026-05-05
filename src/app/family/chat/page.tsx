@@ -5,15 +5,33 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ReactMarkdown from 'react-markdown'
 
+type CaregiverCard = {
+  id: string
+  user_id: string
+  bio: string | null
+  services: string[]
+  languages: string[]
+  years_experience: number
+  hourly_rate_min: number | null
+  hourly_rate_max: number | null
+  is_verified: boolean
+  users: {
+    full_name: string
+    avatar_url: string | null
+    city: string | null
+  }
+}
+
 type Message = {
   role: 'user' | 'assistant'
   content: string
+  caregivers?: CaregiverCard[]
 }
 
 const SUGGESTIONS = [
+  "Find me a caregiver based on my needs",
   "Help me write a job post based on my needs",
   "What questions should I ask in a caregiver interview?",
-  "How do I find the right babysitter for my infant?",
   "Compare full-time nanny vs au pair options",
 ]
 
@@ -64,6 +82,9 @@ RESPONSE STYLE:
 - Never list everything at once. Be conversational.
 - If writing a job post, go ahead and write it fully.
 - End with ONE short follow-up question max.
+
+IMPORTANT: When the family asks to find or search for caregivers, respond with exactly this tag on its own line: [FIND_CAREGIVERS]
+This will trigger the system to show matching caregiver profiles.
 ${context}`
 }
 
@@ -88,7 +109,7 @@ export default function ChatPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single()
-      const { data: profileData, error } = await supabase.from('family_profiles').select('*').eq('user_id', user.id).single()
+      const { data: profileData } = await supabase.from('family_profiles').select('*').eq('user_id', user.id).single()
       setUser(userData)
       setFamilyProfile(profileData)
       setProfileLoaded(true)
@@ -99,6 +120,22 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const findCaregivers = async () => {
+    const answers = familyProfile?.onboarding_answers || {}
+    const response = await fetch('/api/match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        services: answers.services || [],
+        languages: answers.languages || [],
+        budget: answers.childcare_budget,
+        familyUserId: user?.id
+      })
+    })
+    const data = await response.json()
+    return data.caregivers || []
+  }
 
   const sendMessage = async (text?: string) => {
     const userMessage = text || input.trim()
@@ -125,7 +162,19 @@ export default function ChatPage() {
 
       const data = await response.json()
       const assistantMessage = data.content[0].text
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }])
+
+      // 检查是否需要查找 caregiver
+      if (assistantMessage.includes('[FIND_CAREGIVERS]')) {
+        const caregivers = await findCaregivers()
+        const cleanMessage = assistantMessage.replace('[FIND_CAREGIVERS]', '').trim()
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: cleanMessage || "Here are some caregivers that match your needs! 🎉",
+          caregivers
+        }])
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }])
+      }
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -151,34 +200,112 @@ export default function ChatPage() {
 
       <div className="flex-1 overflow-y-auto px-4 py-6 max-w-2xl mx-auto w-full">
         {messages.map((msg, i) => (
-          <div key={i} className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i} className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}>
             {msg.role === 'assistant' && (
               <img src="/ruah-logo.png" alt="Ruah" className="w-8 h-8 mr-2 flex-shrink-0 mt-1" />
             )}
-            <div
-              className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                msg.role === 'user'
-                  ? 'text-white rounded-br-sm'
-                  : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm'
-              }`}
-              style={msg.role === 'user' ? {
-                background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)'
-              } : {}}
-            >
-              {msg.role === 'assistant' ? (
-                <ReactMarkdown
-                  components={{
-                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm">{children}</li>,
-                    strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                  }}
+            <div className="max-w-[85%]">
+              {msg.content && (
+                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'text-white rounded-br-sm'
+                    : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm'
+                }`}
+                  style={msg.role === 'user' ? {
+                    background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)'
+                  } : {}}
                 >
-                  {msg.content}
-                </ReactMarkdown>
-              ) : (
-                msg.content
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                        li: ({ children }) => <li className="text-sm">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : msg.content}
+                </div>
+              )}
+
+              {/* Caregiver Cards */}
+              {msg.caregivers && msg.caregivers.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {msg.caregivers.map(cg => (
+                    <div key={cg.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        {/* Avatar */}
+                        <div className="flex-shrink-0">
+                          {cg.users?.avatar_url ? (
+                            <img src={cg.users.avatar_url} alt={cg.users.full_name} className="w-12 h-12 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#EAF4FF] to-[#FFF6F2] flex items-center justify-center text-lg font-bold text-[#7FB3FF]">
+                              {cg.users?.full_name?.[0] || '?'}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-gray-900 text-sm">{cg.users?.full_name}</span>
+                            {cg.is_verified && (
+                              <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">✓ Verified</span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {cg.languages?.slice(0, 3).map(lang => (
+                              <span key={lang} className="text-xs bg-[#EAF4FF] text-[#4A90D9] px-2 py-0.5 rounded-full">{lang}</span>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            {cg.years_experience > 0 && (
+                              <span>⭐ {cg.years_experience}+ yrs</span>
+                            )}
+                            {cg.hourly_rate_min && (
+                              <span>💰 ${cg.hourly_rate_min}{cg.hourly_rate_max ? `–$${cg.hourly_rate_max}` : '+'}/hr</span>
+                            )}
+                            {cg.users?.city && (
+                              <span>📍 {cg.users.city}</span>
+                            )}
+                          </div>
+
+                          {cg.bio && (
+                            <p className="text-xs text-gray-500 mt-2 line-clamp-2">{cg.bio}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          className="flex-1 text-white py-2 rounded-xl text-xs font-semibold transition"
+                          style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
+                          onClick={() => sendMessage(`Please contact ${cg.users?.full_name} on my behalf and introduce my family's needs`)}
+                        >
+                          🤝 Let Ruah Contact
+                        </button>
+                        <button
+                          className="px-4 py-2 rounded-xl text-xs font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition"
+                          onClick={() => router.push(`/caregiver/${cg.user_id}`)}
+                        >
+                          View Profile
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {msg.caregivers && msg.caregivers.length === 0 && (
+                <div className="mt-3 bg-white border border-gray-100 rounded-2xl p-4 text-center text-sm text-gray-400">
+                  No caregivers found yet. We're growing our community! 🐻
+                </div>
               )}
             </div>
           </div>
