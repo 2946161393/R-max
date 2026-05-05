@@ -38,6 +38,7 @@ function RegisterForm() {
         await supabase.from('family_profiles').insert({
           user_id: data.user.id,
           languages: answers.languages || [],
+          onboarding_answers:answers,
         })
         router.push('/family/dashboard')
       } else {
