@@ -100,6 +100,7 @@ export default function ChatPage() {
   const [user, setUser] = useState<any>(null)
   const [familyProfile, setFamilyProfile] = useState<any>(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
+  const [contacting, setContacting] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
@@ -137,6 +138,46 @@ export default function ChatPage() {
     return data.caregivers || []
   }
 
+  const contactCaregiver = async (cg: CaregiverCard) => {
+    setContacting(cg.user_id)
+    const answers = familyProfile?.onboarding_answers || {}
+    const familyNeeds = [
+      answers.services?.length ? `Services: ${answers.services.join(', ')}` : '',
+      answers.childcare_schedule ? `Schedule: ${answers.childcare_schedule}` : '',
+      answers.childcare_budget ? `Budget: ${answers.childcare_budget}/hr` : '',
+      answers.childcare_extras?.includes('bilingual') ? 'Bilingual caregiver preferred' : '',
+      answers.childcare_ages?.length ? `Children ages: ${answers.childcare_ages.join(', ')}` : '',
+    ].filter(Boolean).join(', ')
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caregiverUserId: cg.user_id,
+          familyUserId: user?.id,
+          familyNeeds,
+          caregiverName: cg.users?.full_name || 'Caregiver',
+          familyName: user?.full_name || 'Family'
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `✅ I've reached out to **${cg.users?.full_name || 'this caregiver'}** on your behalf!\n\nHere's the message I sent:\n\n*"${data.message}"*\n\nI'll let you know when they respond! 🐻`
+        }])
+      }
+    } catch {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: "Sorry, something went wrong. Please try again! 🐻"
+      }])
+    } finally {
+      setContacting(null)
+    }
+  }
+
   const sendMessage = async (text?: string) => {
     const userMessage = text || input.trim()
     if (!userMessage || loading || !profileLoaded) return
@@ -163,7 +204,6 @@ export default function ChatPage() {
       const data = await response.json()
       const assistantMessage = data.content[0].text
 
-      // 检查是否需要查找 caregiver
       if (assistantMessage.includes('[FIND_CAREGIVERS]')) {
         const caregivers = await findCaregivers()
         const cleanMessage = assistantMessage.replace('[FIND_CAREGIVERS]', '').trim()
@@ -223,6 +263,7 @@ export default function ChatPage() {
                         ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
                         li: ({ children }) => <li className="text-sm">{children}</li>,
                         strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                        em: ({ children }) => <em className="italic text-gray-600">{children}</em>,
                       }}
                     >
                       {msg.content}
@@ -237,7 +278,6 @@ export default function ChatPage() {
                   {msg.caregivers.map(cg => (
                     <div key={cg.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
                       <div className="flex items-start gap-3">
-                        {/* Avatar */}
                         <div className="flex-shrink-0">
                           {cg.users?.avatar_url ? (
                             <img src={cg.users.avatar_url} alt={cg.users.full_name} className="w-12 h-12 rounded-full object-cover" />
@@ -247,48 +287,38 @@ export default function ChatPage() {
                             </div>
                           )}
                         </div>
-
-                        {/* Info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-gray-900 text-sm">{cg.users?.full_name}</span>
+                            <span className="font-semibold text-gray-900 text-sm">{cg.users?.full_name || 'Caregiver'}</span>
                             {cg.is_verified && (
                               <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">✓ Verified</span>
                             )}
                           </div>
-
                           <div className="flex flex-wrap gap-1 mb-2">
                             {cg.languages?.slice(0, 3).map(lang => (
                               <span key={lang} className="text-xs bg-[#EAF4FF] text-[#4A90D9] px-2 py-0.5 rounded-full">{lang}</span>
                             ))}
                           </div>
-
                           <div className="flex items-center gap-3 text-xs text-gray-400">
-                            {cg.years_experience > 0 && (
-                              <span>⭐ {cg.years_experience}+ yrs</span>
-                            )}
+                            {cg.years_experience > 0 && <span>⭐ {cg.years_experience}+ yrs</span>}
                             {cg.hourly_rate_min && (
                               <span>💰 ${cg.hourly_rate_min}{cg.hourly_rate_max ? `–$${cg.hourly_rate_max}` : '+'}/hr</span>
                             )}
-                            {cg.users?.city && (
-                              <span>📍 {cg.users.city}</span>
-                            )}
+                            {cg.users?.city && <span>📍 {cg.users.city}</span>}
                           </div>
-
                           {cg.bio && (
                             <p className="text-xs text-gray-500 mt-2 line-clamp-2">{cg.bio}</p>
                           )}
                         </div>
                       </div>
-
-                      {/* Actions */}
                       <div className="flex gap-2 mt-3">
                         <button
-                          className="flex-1 text-white py-2 rounded-xl text-xs font-semibold transition"
+                          disabled={contacting === cg.user_id}
+                          onClick={() => contactCaregiver(cg)}
+                          className="flex-1 text-white py-2 rounded-xl text-xs font-semibold transition disabled:opacity-60"
                           style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
-                          onClick={() => sendMessage(`Please contact ${cg.users?.full_name} on my behalf and introduce my family's needs`)}
                         >
-                          🤝 Let Ruah Contact
+                          {contacting === cg.user_id ? '⏳ Contacting...' : '🤝 Let Ruah Contact'}
                         </button>
                         <button
                           className="px-4 py-2 rounded-xl text-xs font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition"

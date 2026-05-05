@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     .from('caregiver_profiles')
     .select(`
       *,
-      users (
+      users!caregiver_profiles_user_id_fkey (
         id,
         full_name,
         avatar_url,
@@ -18,12 +18,10 @@ export async function POST(request: NextRequest) {
     `)
     .limit(5)
 
-  // 按服务筛选
   if (services?.length) {
     query = query.overlaps('services', services)
   }
 
-  // 按语言筛选
   if (languages?.length) {
     query = query.overlaps('languages', languages)
   }
