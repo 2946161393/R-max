@@ -29,6 +29,8 @@ export default function CaregiverProfile() {
   const [input, setInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [showTooltip, setShowTooltip] = useState(true)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
@@ -42,10 +44,10 @@ export default function CaregiverProfile() {
       setUser(userData)
       setProfile(profileData)
       setBio(profileData?.bio || '')
+      setAvatarUrl(userData?.avatar_url || null)
       setLoading(false)
     }
     load()
-    // 3秒后隐藏 tooltip
     const timer = setTimeout(() => setShowTooltip(false), 4000)
     return () => clearTimeout(timer)
   }, [])
@@ -53,6 +55,26 @@ export default function CaregiverProfile() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    setUploadingAvatar(true)
+    const ext = file.name.split('.').pop()
+    const path = `${user.id}/avatar.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      await supabase.from('users').update({ avatar_url: data.publicUrl }).eq('id', user.id)
+      setAvatarUrl(data.publicUrl)
+    }
+    setUploadingAvatar(false)
+  }
+
+  const removeAvatar = async () => {
+    await supabase.from('users').update({ avatar_url: null }).eq('id', user.id)
+    setAvatarUrl(null)
+  }
 
   const saveBio = async () => {
     setSaving(true)
@@ -154,6 +176,43 @@ Your job:
       <div className="max-w-2xl mx-auto px-6 py-8 pb-32">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">My Profile</h1>
 
+        {/* Avatar */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4 flex items-center gap-4">
+          <div className="relative flex-shrink-0 group">
+            <label className="cursor-pointer block">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-20 h-20 rounded-full object-cover" />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#EAF4FF] to-[#FFF6F2] flex items-center justify-center text-3xl font-bold text-[#7FB3FF]">
+                  {user?.full_name?.[0] || '?'}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                <span className="text-white text-xl">📷</span>
+              </div>
+              {uploadingAvatar && (
+                <div className="absolute inset-0 rounded-full bg-white/70 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-[#7FB3FF] border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
+            </label>
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 mb-1">{user?.full_name}</div>
+            <label className="cursor-pointer text-sm text-[#7FB3FF] hover:underline block mb-1">
+              {avatarUrl ? 'Change photo' : '+ Upload photo'}
+              <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
+            </label>
+            {avatarUrl && (
+              <button onClick={removeAvatar} className="text-xs text-red-400 hover:text-red-600 block mb-1">
+                Remove photo
+              </button>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">JPG, PNG · Max 5MB</p>
+          </div>
+        </div>
+
         {/* Basic Info */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
           <h2 className="font-semibold text-gray-900 mb-4">Basic Info</h2>
@@ -244,14 +303,12 @@ Your job:
       {/* Floating AI Button */}
       {!chatOpen && (
         <div className="fixed bottom-6 right-6 flex flex-col items-end gap-2 z-50">
-          {/* Tooltip bubble */}
           {showTooltip && (
-            <div className="bg-gray-900 text-white text-xs px-3 py-2 rounded-xl rounded-br-sm max-w-40 text-center animate-bounce-slow">
+            <div className="relative bg-gray-900 text-white text-xs px-3 py-2 rounded-xl rounded-br-sm max-w-40 text-center animate-bounce-slow">
               ✨ Let me write your bio!
               <div className="absolute bottom-[-6px] right-4 w-3 h-3 bg-gray-900 rotate-45" />
             </div>
           )}
-
           <button
             onClick={() => { setChatOpen(true); setShowTooltip(false) }}
             className="flex items-center gap-2 text-white pl-3 pr-4 py-3 rounded-full shadow-xl transition hover:scale-105 active:scale-95"
@@ -272,7 +329,6 @@ Your job:
           className="fixed bottom-0 right-0 left-0 md:left-auto md:right-6 md:bottom-6 md:w-96 bg-white rounded-t-3xl md:rounded-3xl shadow-2xl z-50 flex flex-col"
           style={{ height: '70vh', maxHeight: '600px' }}
         >
-          {/* Chat Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 rounded-t-3xl"
             style={{ background: 'linear-gradient(135deg, #EAF4FF 0%, #FFF6F2 100%)' }}>
             <div className="flex items-center gap-2">
@@ -285,7 +341,6 @@ Your job:
             <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -335,7 +390,6 @@ Your job:
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
           <div className="px-4 py-3 border-t border-gray-100">
             <div className="flex gap-2">
               <input
