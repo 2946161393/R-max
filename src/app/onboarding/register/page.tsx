@@ -38,16 +38,20 @@ function RegisterForm() {
         await supabase.from('family_profiles').insert({
           user_id: data.user.id,
           languages: answers.languages || [],
-          onboarding_answers:answers,
+          onboarding_answers: answers,
         })
         router.push('/family/dashboard')
       } else {
+        const rateMin = answers.rate
+          ? Number(answers.rate.split('–')[0].replace('$', '').trim())
+          : null
         await supabase.from('caregiver_profiles').insert({
           user_id: data.user.id,
           services: answers.services || [],
           languages: answers.languages || [],
-          years_experience: answers.experience || 0,
-          bio: answers.bio || '',
+          years_experience: Number(answers.experience) || 0,
+          hourly_rate_min: rateMin,
+          onboarding_answers: answers,
         })
         router.push('/caregiver/dashboard')
       }
@@ -65,7 +69,7 @@ function RegisterForm() {
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="text-3xl font-bold text-blue-600 mb-2">Ruah</div>
+          <img src="/ruah-logo.png" alt="Ruah" className="w-14 h-14 mx-auto mb-3" />
           <h1 className="text-2xl font-bold text-gray-900">Almost there!</h1>
           <p className="text-gray-400 text-sm mt-1">Create your account to see your matches</p>
         </div>
@@ -100,27 +104,28 @@ function RegisterForm() {
             type="text"
             value={fullName}
             onChange={e => setFullName(e.target.value)}
-            className="w-full border border-gray-200 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-200 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]"
             placeholder="Full name"
           />
           <input
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            className="w-full border border-gray-200 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-200 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]"
             placeholder="Email address"
           />
           <input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            className="w-full border border-gray-200 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-200 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]"
             placeholder="Password (8+ characters)"
           />
           <button
             onClick={handleRegister}
             disabled={loading || !fullName || !email || !password}
-            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold disabled:opacity-40 hover:bg-blue-700 transition"
+            className="w-full text-white py-4 rounded-2xl font-semibold disabled:opacity-40 transition"
+            style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
           >
             {loading ? 'Creating account...' : 'Create account →'}
           </button>

@@ -35,7 +35,6 @@ export default function CaregiverOnboarding() {
     'availability',
     'living',
     'rate',
-    'bio',
   ]
 
   const next = (current: string) => {
@@ -215,74 +214,36 @@ export default function CaregiverOnboarding() {
 
         {/* Step: 价格 */}
         {step === 'rate' && (
-          <RateStep
-            value={answers.rate || 20}
-            onNext={(val) => { save('rate', val); next('rate') }}
-            onBack={() => back('rate')}
-          />
-        )}
-
-        {/* Step: Bio */}
-        {step === 'bio' && (
           <div>
-            <button onClick={() => back('bio')} className="text-gray-400 text-sm mb-8 hover:text-gray-600">← Back</button>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Introduce yourself</h1>
-            <p className="text-gray-400 text-sm mb-6">A short bio helps families get to know you</p>
-            <textarea
-              value={answers.bio || ''}
-              onChange={e => save('bio', e.target.value)}
-              rows={5}
-              className="w-full border border-gray-200 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6"
-              placeholder="Hi! I'm an experienced caregiver who loves working with kids..."
-            />
-            <button
-              onClick={() => next('bio')}
-              disabled={!answers.bio}
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold disabled:opacity-40 hover:bg-blue-700 transition"
-            >
-              See my matches →
-            </button>
+            <button onClick={() => back('rate')} className="text-gray-400 text-sm mb-8 hover:text-gray-600">← Back</button>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">What's your hourly rate?</h1>
+            <p className="text-gray-400 text-sm mb-8">per hour · you can update this anytime</p>
+            <div className="space-y-3">
+              {[
+                { id: '$15–25', label: '$15–25/hr', desc: 'Entry level' },
+                { id: '$25–35', label: '$25–35/hr', desc: 'Experienced' },
+                { id: '$35–50', label: '$35–50/hr', desc: 'Highly experienced' },
+                { id: '$50–80', label: '$50–80/hr', desc: 'Specialized skills' },
+                { id: '$80+', label: '$80+/hr', desc: 'Premium / medical background' },
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => { save('rate', opt.id); next('rate') }}
+                  className={`w-full p-4 rounded-2xl border-2 text-left transition ${
+                    answers.rate === opt.id
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="font-medium text-gray-900">{opt.label}</div>
+                  <div className="text-sm text-gray-400 mt-0.5">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
       </div>
-    </div>
-  )
-}
-
-function RateStep({ value, onNext, onBack }: {
-  value: number
-  onNext: (val: number) => void
-  onBack: () => void
-}) {
-  const [val, setVal] = useState(value)
-  return (
-    <div>
-      <button onClick={onBack} className="text-gray-400 text-sm mb-8 hover:text-gray-600">← Back</button>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">What's your hourly rate?</h1>
-      <p className="text-gray-400 text-sm mb-12">You can always change this later</p>
-      <div className="text-center mb-8">
-        <span className="text-5xl font-bold text-blue-600">${val}</span>
-        <span className="text-gray-400 text-lg">/hr</span>
-      </div>
-      <input
-        type="range"
-        min={10}
-        max={100}
-        value={val}
-        onChange={e => setVal(Number(e.target.value))}
-        className="w-full accent-blue-600 mb-12"
-      />
-      <div className="flex justify-between text-sm text-gray-400 mb-12">
-        <span>$10/hr</span>
-        <span>$100/hr</span>
-      </div>
-      <button
-        onClick={() => onNext(val)}
-        className="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold hover:bg-blue-700 transition"
-      >
-        Continue →
-      </button>
     </div>
   )
 }
