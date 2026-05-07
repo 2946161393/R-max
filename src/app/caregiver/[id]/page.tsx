@@ -23,8 +23,24 @@ export default function CaregiverPublicProfile() {
   useEffect(() => {
     const load = async () => {
       const userId = params.id as string
-      const { data: userData } = await supabase.from('users').select('*').eq('id', userId).single()
-      const { data: profileData } = await supabase.from('caregiver_profiles').select('*').eq('user_id', userId).single()
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      // Return 404 if user is banned or shadow banned
+      if (!userData || userData.is_banned || userData.is_shadow_banned) {
+        router.push('/not-found')
+        return
+      }
+
+      const { data: profileData } = await supabase
+        .from('caregiver_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+
       setUser(userData)
       setProfile(profileData)
       setLoading(false)

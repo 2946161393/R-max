@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 export default function CaregiverDashboard() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
+  const [notifications, setNotifications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
@@ -20,13 +21,42 @@ export default function CaregiverDashboard() {
         .from('users').select('*').eq('id', user.id).single()
       const { data: caregiverData } = await supabase
         .from('caregiver_profiles').select('*').eq('user_id', user.id).single()
+      const { data: notifData } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10)
 
       setUser(userData)
       setProfile(caregiverData)
+      setNotifications(notifData || [])
       setLoading(false)
     }
     load()
   }, [])
+
+  const markAsRead = async (id: string) => {
+    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  }
+
+  const handleInterested = async (n: any) => {
+    // 给家庭发通知
+    if (n.data?.familyUserId) {
+      await supabase.from('notifications').insert({
+        user_id: n.data.familyUserId,
+        type: 'caregiver_interested',
+        title: `${user?.full_name} is interested! 🎉`,
+        body: `Great news! ${user?.full_name} has responded to your inquiry and is interested in connecting with your family.`,
+        data: { caregiverUserId: user?.id, caregiverName: user?.full_name }
+      })
+    }
+    await markAsRead(n.id)
+    setNotifications(prev => prev.map(notif =>
+      notif.id === n.id ? { ...notif, responded: true, read: true } : notif
+    ))
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -46,6 +76,7 @@ export default function CaregiverDashboard() {
     { label: 'Background check', done: profile?.background_check_status === 'passed' },
   ]
   const completionPct = Math.round((completionItems.filter(i => i.done).length / completionItems.length) * 100)
+  const unreadCount = notifications.filter(n => !n.read).length
 
   return (
     <div className="min-h-screen bg-[#FAFCFF]">
@@ -67,6 +98,73 @@ export default function CaregiverDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Welcome, {user?.full_name?.split(' ')[0]}! 🤝</h1>
           <p className="text-gray-400 mt-1">Manage your profile and find families to help</p>
         </div>
+
+        {/* Notifications */}
+        {notifications.length > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="font-semibold text-gray-900">Notifications</h2>
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{unreadCount} new</span>
+              )}
+            </div>
+            <div className="space-y-3">
+              {notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => markAsRead(n.id)}
+                  className={`bg-white rounded-2xl border p-4 cursor-pointer transition ${
+                    n.read ? 'border-gray-100' : 'border-[#7FB3FF] bg-blue-50/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="text-2xl mt-0.5">
+                        {n.type === 'new_match' ? '🎉' : '📬'}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900 text-sm">{n.title}</div>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">{n.body}</p>
+                        <div className="text-xs text-gray-300 mt-2">
+                          {new Date(n.created_at).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    {!n.read && (
+                      <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1" />
+                    )}
+                  </div>
+
+                  {n.type === 'new_match' && !n.responded && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={e => { e.stopPropagation(); handleInterested(n) }}
+                        className="flex-1 text-white py-2 rounded-xl text-xs font-semibold"
+                        style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
+                      >
+                        ✅ I'm interested!
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); markAsRead(n.id) }}
+                        className="px-4 py-2 rounded-xl text-xs font-medium border-2 border-gray-200 text-gray-500 hover:border-gray-300"
+                      >
+                        Not available
+                      </button>
+                    </div>
+                  )}
+
+                  {n.responded && (
+                    <div className="mt-3 text-xs text-green-600 font-medium">
+                      ✓ You responded — waiting for family to confirm
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Profile Completion */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
@@ -125,7 +223,7 @@ export default function CaregiverDashboard() {
         <div className="grid grid-cols-3 gap-4 mb-4">
           {[
             { label: 'Profile Views', value: '0', icon: '👁' },
-            { label: 'Matches', value: '0', icon: '🤝' },
+            { label: 'Matches', value: String(notifications.filter(n => n.type === 'new_match').length), icon: '🤝' },
             { label: 'Rating', value: '—', icon: '⭐' },
           ].map(stat => (
             <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-4 text-center">

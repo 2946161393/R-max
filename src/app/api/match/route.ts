@@ -13,7 +13,9 @@ export async function POST(request: NextRequest) {
         id,
         full_name,
         avatar_url,
-        city
+        city,
+        is_banned,
+        is_shadow_banned
       )
     `)
     .limit(5)
@@ -30,5 +32,10 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ caregivers: data || [] })
+  // Filter out banned and shadow banned users
+  const filtered = (data || []).filter(cg =>
+    !cg.users?.is_banned && !cg.users?.is_shadow_banned
+  )
+
+  return NextResponse.json({ caregivers: filtered })
 }
