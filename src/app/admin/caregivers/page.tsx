@@ -1,0 +1,411 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+
+const EXPERIENCE_LABELS: Record<string, string> = {
+  '0': 'Less than 1 year',
+  '1': '1–2 years',
+  '3': '3–5 years',
+  '5': '5–10 years',
+  '10': '10+ years',
+}
+
+export default function AdminCaregivers() {
+  const [caregivers, setCaregivers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'verified' | 'unverified' | 'banned'>('all')
+  const [selected, setSelected] = useState<any>(null)
+  const supabase = createClient()
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from('users')
+        .select(`
+          *,
+          caregiver_profiles (
+            services, languages, years_experience,
+            hourly_rate_min, hourly_rate_max,
+            bio, background_check_status, is_verified,
+            onboarding_answers, rating, review_count
+          ),
+          notifications (id, type, read, created_at)
+        `)
+        .eq('role', 'caregiver')
+        .order('created_at', { ascending: false })
+
+      setCaregivers(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const banUser = async (userId: string, type: 'hard' | 'shadow', reason: string) => {
+    await supabase.from('users').update({
+      is_banned: type === 'hard',
+      is_shadow_banned: type === 'shadow',
+      ban_reason: reason,
+    }).eq('id', userId)
+    setCaregivers(prev => prev.map(c =>
+      c.id === userId ? {
+        ...c,
+        is_banned: type === 'hard',
+        is_shadow_banned: type === 'shadow',
+        ban_reason: reason
+      } : c
+    ))
+    setSelected(null)
+  }
+
+  const unbanUser = async (userId: string) => {
+    await supabase.from('users').update({
+      is_banned: false,
+      is_shadow_banned: false,
+      ban_reason: null
+    }).eq('id', userId)
+    setCaregivers(prev => prev.map(c =>
+      c.id === userId ? { ...c, is_banned: false, is_shadow_banned: false, ban_reason: null } : c
+    ))
+    setSelected(null)
+  }
+
+  const verifyCaregiver = async (userId: string, profileId: string) => {
+    await supabase.from('caregiver_profiles')
+      .update({ is_verified: true })
+      .eq('user_id', userId)
+    setCaregivers(prev => prev.map(c =>
+      c.id === userId ? {
+        ...c,
+        caregiver_profiles: { ...c.caregiver_profiles, is_verified: true }
+      } : c
+    ))
+  }
+
+  const filtered = caregivers.filter(c => {
+    const matchSearch =
+      c.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      c.email?.toLowerCase().includes(search.toLowerCase())
+    const matchFilter =
+      filter === 'all' ||
+      (filter === 'verified' && c.caregiver_profiles?.is_verified) ||
+      (filter === 'unverified' && !c.caregiver_profiles?.is_verified) ||
+      (filter === 'banned' && (c.is_banned || c.is_shadow_banned))
+    return matchSearch && matchFilter
+  })
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="text-gray-400">Loading...</div>
+    </div>
+  )
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-white">Caregivers</h1>
+        <p className="text-gray-400 mt-1">{caregivers.length} registered caregivers</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          { label: 'Total', value: caregivers.length, icon: '🤝' },
+          { label: 'Verified', value: caregivers.filter(c => c.caregiver_profiles?.is_verified).length, icon: '✅' },
+          { label: 'With Bio', value: caregivers.filter(c => c.caregiver_profiles?.bio).length, icon: '📝' },
+          { label: 'Banned', value: caregivers.filter(c => c.is_banned || c.is_shadow_banned).length, icon: '🚫' },
+        ].map(stat => (
+          <div key={stat.label} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <div className="text-xl mb-2">{stat.icon}</div>
+            <div className="text-2xl font-bold text-white">{stat.value}</div>
+            <div className="text-sm text-gray-400 mt-1">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 mb-4">
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by name or email..."
+          className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#7FB3FF]"
+        />
+        {(['all', 'verified', 'unverified', 'banned'] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-4 py-2.5 rounded-xl text-sm font-medium transition ${
+              filter === f
+                ? 'bg-[#7FB3FF] text-white'
+                : 'bg-gray-900 border border-gray-700 text-gray-400 hover:text-white'
+            }`}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+        <div className="divide-y divide-gray-800">
+          {filtered.map(c => (
+            <div key={c.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-800/50 transition">
+              {/* Avatar */}
+              <div className="flex-shrink-0">
+                {c.avatar_url ? (
+                  <img src={c.avatar_url} className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-300">
+                    {c.full_name?.[0] || '?'}
+                  </div>
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-white text-sm">{c.full_name}</span>
+                  {c.caregiver_profiles?.is_verified && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">✓ Verified</span>
+                  )}
+                  {c.is_banned && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">🚫 Banned</span>
+                  )}
+                  {c.is_shadow_banned && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">👻 Shadow</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">{c.email}</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {c.caregiver_profiles?.services?.join(', ')} ·{' '}
+                  {c.caregiver_profiles?.languages?.join(', ')} ·{' '}
+                  {EXPERIENCE_LABELS[String(c.caregiver_profiles?.years_experience)]} ·{' '}
+                  ${c.caregiver_profiles?.hourly_rate_min}–${c.caregiver_profiles?.hourly_rate_max}/hr
+                </div>
+                {c.caregiver_profiles?.bio && (
+                  <div className="text-xs text-gray-600 mt-0.5 truncate max-w-sm">
+                    {c.caregiver_profiles.bio}
+                  </div>
+                )}
+              </div>
+
+              {/* Rating */}
+              <div className="text-center hidden md:block flex-shrink-0">
+                <div className="text-sm font-bold text-white">
+                  {c.caregiver_profiles?.rating > 0 ? `⭐ ${c.caregiver_profiles.rating}` : '—'}
+                </div>
+                <div className="text-xs text-gray-500">{c.caregiver_profiles?.review_count || 0} reviews</div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => setSelected(c)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition"
+                >
+                  View
+                </button>
+                {!c.caregiver_profiles?.is_verified && !c.is_banned && (
+                  <button
+                    onClick={() => verifyCaregiver(c.id, c.caregiver_profiles?.id)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition"
+                  >
+                    Verify
+                  </button>
+                )}
+                {c.is_banned || c.is_shadow_banned ? (
+                  <button
+                    onClick={() => unbanUser(c.id)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
+                  >
+                    Unban
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSelected(c)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+                  >
+                    Ban
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Detail Modal */}
+      {selected && (
+        <CaregiverModal
+          caregiver={selected}
+          onClose={() => setSelected(null)}
+          onBan={banUser}
+          onUnban={unbanUser}
+          onVerify={verifyCaregiver}
+        />
+      )}
+    </div>
+  )
+}
+
+function CaregiverModal({ caregiver, onClose, onBan, onUnban, onVerify }: {
+  caregiver: any
+  onClose: () => void
+  onBan: (id: string, type: 'hard' | 'shadow', reason: string) => void
+  onUnban: (id: string) => void
+  onVerify: (userId: string, profileId: string) => void
+}) {
+  const [banReason, setBanReason] = useState('')
+  const [banType, setBanType] = useState<'shadow' | 'hard'>('shadow')
+  const profile = caregiver.caregiver_profiles
+  const answers = profile?.onboarding_answers || {}
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+      <div className="bg-gray-900 rounded-2xl border border-gray-700 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            {caregiver.avatar_url ? (
+              <img src={caregiver.avatar_url} className="w-14 h-14 rounded-full object-cover" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold text-gray-300">
+                {caregiver.full_name?.[0] || '?'}
+              </div>
+            )}
+            <div>
+              <div className="font-bold text-white flex items-center gap-2">
+                {caregiver.full_name}
+                {profile?.is_verified && (
+                  <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">✓ Verified</span>
+                )}
+              </div>
+              <div className="text-sm text-gray-400">{caregiver.email}</div>
+              <div className="text-xs text-gray-500">{caregiver.id}</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">×</button>
+        </div>
+
+        {/* Details */}
+        <div className="space-y-3 mb-4">
+          {[
+            { label: 'Services', value: profile?.services?.join(', ') },
+            { label: 'Languages', value: profile?.languages?.join(', ') },
+            { label: 'Experience', value: EXPERIENCE_LABELS[String(profile?.years_experience)] },
+            { label: 'Rate', value: `$${profile?.hourly_rate_min}–$${profile?.hourly_rate_max}/hr` },
+            { label: 'Availability', value: answers.availability },
+            { label: 'Live-in', value: answers.living },
+            { label: 'Background Check', value: profile?.background_check_status || 'Not started' },
+          ].map(item => (
+            <div key={item.label} className="bg-gray-800 rounded-xl p-3">
+              <div className="text-xs text-gray-400 mb-1">{item.label}</div>
+              <div className="text-sm text-white">{item.value || '—'}</div>
+            </div>
+          ))}
+
+          {profile?.bio && (
+            <div className="bg-gray-800 rounded-xl p-3">
+              <div className="text-xs text-gray-400 mb-1">Bio</div>
+              <div className="text-sm text-white leading-relaxed">{profile.bio}</div>
+            </div>
+          )}
+
+          {caregiver.is_banned && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+              <div className="text-xs text-red-400 mb-1">🚫 Hard Banned</div>
+              <div className="text-sm text-red-300">{caregiver.ban_reason}</div>
+            </div>
+          )}
+          {caregiver.is_shadow_banned && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3">
+              <div className="text-xs text-yellow-400 mb-1">👻 Shadow Banned</div>
+              <div className="text-sm text-yellow-300">{caregiver.ban_reason}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Verify button */}
+        {!profile?.is_verified && !caregiver.is_banned && !caregiver.is_shadow_banned && (
+          <button
+            onClick={() => { onVerify(caregiver.id, profile?.id); onClose() }}
+            className="w-full py-2.5 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition mb-3"
+          >
+            ✅ Verify This Caregiver
+          </button>
+        )}
+
+        {/* Ban / Unban */}
+        {!caregiver.is_banned && !caregiver.is_shadow_banned ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setBanType('shadow')}
+                className={`py-2.5 rounded-xl text-xs font-medium border transition ${
+                  banType === 'shadow'
+                    ? 'border-yellow-500 bg-yellow-500/20 text-yellow-400'
+                    : 'border-gray-700 text-gray-400 hover:text-white'
+                }`}
+              >
+                👻 Shadow Ban
+                <div className="text-xs font-normal opacity-70 mt-0.5">Hidden from families</div>
+              </button>
+              <button
+                onClick={() => setBanType('hard')}
+                className={`py-2.5 rounded-xl text-xs font-medium border transition ${
+                  banType === 'hard'
+                    ? 'border-red-500 bg-red-500/20 text-red-400'
+                    : 'border-gray-700 text-gray-400 hover:text-white'
+                }`}
+              >
+                🚫 Hard Ban
+                <div className="text-xs font-normal opacity-70 mt-0.5">Blocked from platform</div>
+              </button>
+            </div>
+            <textarea
+              value={banReason}
+              onChange={e => setBanReason(e.target.value)}
+              placeholder="Reason for ban (internal only)..."
+              rows={2}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl text-sm border border-gray-700 text-gray-400 hover:text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => onBan(caregiver.id, banType, banReason)}
+                disabled={!banReason.trim()}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 transition ${
+                  banType === 'hard' ? 'bg-red-500 hover:bg-red-600' : 'bg-yellow-600 hover:bg-yellow-700'
+                }`}
+              >
+                {banType === 'hard' ? '🚫 Hard Ban' : '👻 Shadow Ban'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl text-sm border border-gray-700 text-gray-400 hover:text-white transition"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => onUnban(caregiver.id)}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition"
+            >
+              ✅ Remove Ban
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
