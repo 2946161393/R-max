@@ -19,6 +19,10 @@ export default function FamilyOnboarding() {
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [serviceQueue, setServiceQueue] = useState<string[]>([])
   const [answers, setAnswers] = useState<Answers>({})
+  const [zipcode, setZipcode] = useState('')
+  const [zipcodeInfo, setZipcodeInfo] = useState<{ city: string; state: string } | null>(null)
+  const [zipcodeLoading, setZipcodeLoading] = useState(false)
+  const [zipcodeError, setZipcodeError] = useState('')
   const router = useRouter()
 
   const save = (key: string, value: any) => setAnswers(prev => ({ ...prev, [key]: value }))
@@ -49,13 +53,46 @@ export default function FamilyOnboarding() {
   const next = (currentStep: string) => {
     const idx = serviceQueue.indexOf(currentStep)
     if (idx < serviceQueue.length - 1) setStep(serviceQueue[idx + 1])
-    else router.push(`/onboarding/register?role=family&answers=${encodeURIComponent(JSON.stringify({ ...answers, services: selectedServices }))}`)
+    else setStep('zipcode') // 最后一步去 zipcode
   }
 
   const back = (currentStep: string) => {
     const idx = serviceQueue.indexOf(currentStep)
     if (idx === 0) setStep('services')
     else setStep(serviceQueue[idx - 1])
+  }
+
+  const lookupZipcode = async (zip: string) => {
+    if (zip.length !== 5) { setZipcodeInfo(null); setZipcodeError(''); return }
+    setZipcodeLoading(true)
+    setZipcodeError('')
+    try {
+      const res = await fetch(`https://api.zippopotam.us/us/${zip}`)
+      if (!res.ok) { setZipcodeError('Invalid ZIP code'); setZipcodeInfo(null) }
+      else {
+        const data = await res.json()
+        const place = data.places?.[0]
+        if (place) setZipcodeInfo({ city: place['place name'], state: place['state abbreviation'] })
+      }
+    } catch { setZipcodeError('Could not verify') }
+    finally { setZipcodeLoading(false) }
+  }
+
+  const handleZipcodeChange = (val: string) => {
+    const cleaned = val.replace(/\D/g, '').slice(0, 5)
+    setZipcode(cleaned)
+    lookupZipcode(cleaned)
+  }
+
+  const goToRegister = () => {
+    const finalAnswers = {
+      ...answers,
+      services: selectedServices,
+      zipcode,
+      city: zipcodeInfo?.city,
+      state: zipcodeInfo?.state,
+    }
+    router.push(`/onboarding/register?role=family&answers=${encodeURIComponent(JSON.stringify(finalAnswers))}`)
   }
 
   return (
@@ -449,6 +486,64 @@ export default function FamilyOnboarding() {
             onSelect={val => { save('tutor_budget', val); next('tutor_budget') }}
             onBack={() => back('tutor_budget')}
           />
+        )}
+
+        {/* ===== ZIPCODE — 最后一步 ===== */}
+        {step === 'zipcode' && (
+          <div>
+            <button
+              onClick={() => {
+                const lastStep = serviceQueue[serviceQueue.length - 1]
+                setStep(lastStep)
+              }}
+              className="text-gray-400 text-sm mb-8 hover:text-gray-600"
+            >← Back</button>
+            <div className="text-center mb-8">
+              <div className="text-4xl mb-3">📍</div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Where are you located?</h1>
+              <p className="text-gray-400 text-sm">We'll find caregivers near you</p>
+            </div>
+            <div className="relative mb-3">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={zipcode}
+                onChange={e => handleZipcodeChange(e.target.value)}
+                className={`w-full border-2 rounded-2xl px-4 py-4 text-lg text-center font-medium focus:outline-none tracking-widest ${
+                  zipcodeError ? 'border-red-300' : zipcodeInfo ? 'border-green-400' : 'border-gray-200 focus:border-blue-400'
+                }`}
+                placeholder="ZIP Code"
+                maxLength={5}
+              />
+              {zipcodeLoading && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+
+            {zipcodeInfo && (
+              <div className="flex items-center justify-center gap-2 mb-6 text-green-600">
+                <span className="text-lg">✓</span>
+                <span className="font-semibold">{zipcodeInfo.city}, {zipcodeInfo.state}</span>
+              </div>
+            )}
+            {zipcodeError && (
+              <p className="text-center text-red-400 text-sm mb-6">{zipcodeError}</p>
+            )}
+            {!zipcodeInfo && !zipcodeError && zipcode.length < 5 && (
+              <p className="text-center text-gray-400 text-sm mb-6">Enter your 5-digit ZIP code</p>
+            )}
+
+            <button
+              onClick={goToRegister}
+              disabled={!zipcodeInfo || zipcodeLoading}
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold disabled:opacity-40 hover:bg-blue-700 transition"
+            >
+              Continue →
+            </button>
+
+          </div>
         )}
 
       </div>

@@ -31,6 +31,12 @@ export default function CaregiverProfile() {
   const [showTooltip, setShowTooltip] = useState(true)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [zipcode, setZipcode] = useState('')
+  const [zipcodeInfo, setZipcodeInfo] = useState<{ city: string; state: string } | null>(null)
+  const [zipcodeLoading, setZipcodeLoading] = useState(false)
+  const [zipcodeError, setZipcodeError] = useState('')
+  const [savingLocation, setSavingLocation] = useState(false)
+  const [savedLocation, setSavedLocation] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
@@ -45,6 +51,10 @@ export default function CaregiverProfile() {
       setProfile(profileData)
       setBio(profileData?.bio || '')
       setAvatarUrl(userData?.avatar_url || null)
+      setZipcode(userData?.zipcode || '')
+      if (userData?.city && userData?.state) {
+        setZipcodeInfo({ city: userData.city, state: userData.state })
+      }
       setLoading(false)
     }
     load()
@@ -55,6 +65,41 @@ export default function CaregiverProfile() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const lookupZipcode = async (zip: string) => {
+    if (zip.length !== 5) { setZipcodeInfo(null); setZipcodeError(''); return }
+    setZipcodeLoading(true)
+    setZipcodeError('')
+    try {
+      const res = await fetch(`https://api.zippopotam.us/us/${zip}`)
+      if (!res.ok) { setZipcodeError('Invalid ZIP code'); setZipcodeInfo(null) }
+      else {
+        const data = await res.json()
+        const place = data.places?.[0]
+        if (place) setZipcodeInfo({ city: place['place name'], state: place['state abbreviation'] })
+      }
+    } catch { setZipcodeError('Could not verify') }
+    finally { setZipcodeLoading(false) }
+  }
+
+  const handleZipcodeChange = (val: string) => {
+    const cleaned = val.replace(/\D/g, '').slice(0, 5)
+    setZipcode(cleaned)
+    lookupZipcode(cleaned)
+  }
+
+  const saveLocation = async () => {
+    if (!zipcodeInfo) return
+    setSavingLocation(true)
+    await supabase.from('users').update({
+      zipcode,
+      city: zipcodeInfo.city,
+      state: zipcodeInfo.state,
+    }).eq('id', user.id)
+    setSavingLocation(false)
+    setSavedLocation(true)
+    setTimeout(() => setSavedLocation(false), 2000)
+  }
 
   const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -87,12 +132,10 @@ export default function CaregiverProfile() {
   const sendMessage = async (text?: string) => {
     const userMessage = text || input.trim()
     if (!userMessage || chatLoading) return
-
     setInput('')
     const newMessages = [...messages, { role: 'user' as const, content: userMessage }]
     setMessages(newMessages)
     setChatLoading(true)
-
     const answers = profile?.onboarding_answers || {}
     const systemPrompt = `You are Ruah!, a warm AI assistant helping caregivers write professional bios.
 The caregiver's name is ${user?.full_name}.
@@ -104,7 +147,6 @@ Your job:
 3. Keep bios under 100 words — warm, specific, and trustworthy.
 4. Write ONLY the English bio — no Chinese text, no intro sentences like "Here is your bio:", no "---" separators.
 5. Start directly with "Hi, I'm [name]!" or similar.`
-
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -128,7 +170,6 @@ Your job:
     const lines = content.split('\n')
     const bioLines: string[] = []
     let started = false
-
     for (const line of lines) {
       const trimmed = line.trim()
       if (!started && (
@@ -137,12 +178,10 @@ Your job:
         trimmed === '' ||
         trimmed.startsWith('**[Use this bio]')
       )) continue
-
       if (!started && trimmed.length > 0) started = true
       if (trimmed.includes('[Use this bio]')) break
       if (started) bioLines.push(line)
     }
-
     const bioText = bioLines.join('\n').trim()
     setBio(bioText)
     setChatOpen(false)
@@ -163,7 +202,6 @@ Your job:
 
   return (
     <div className="min-h-screen bg-[#FAFCFF]">
-      {/* Header */}
       <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
         <button onClick={() => router.push('/caregiver/dashboard')} className="text-gray-400 hover:text-gray-600 text-sm">← Back</button>
         <div className="flex items-center gap-2">
@@ -233,16 +271,57 @@ Your job:
               </div>
             ))}
           </div>
+
+          {/* Location */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-900">📍 Location</span>
+              {zipcodeInfo && (
+                <span className="text-xs text-gray-400">{zipcodeInfo.city}, {zipcodeInfo.state}</span>
+              )}
+            </div>
+            {!zipcode && (
+              <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg mb-2">
+                ⚠️ Add your ZIP code so families near you can find you
+              </p>
+            )}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={zipcode}
+                  onChange={e => handleZipcodeChange(e.target.value)}
+                  className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF] ${
+                    zipcodeError ? 'border-red-300' : zipcodeInfo ? 'border-green-300' : 'border-gray-200'
+                  }`}
+                  placeholder="ZIP code (e.g. 10001)"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs">
+                  {zipcodeLoading && <span className="text-gray-400">...</span>}
+                  {!zipcodeLoading && zipcodeInfo && <span className="text-green-500">✓</span>}
+                  {!zipcodeLoading && zipcodeError && <span className="text-red-400">✕</span>}
+                </div>
+              </div>
+              <button
+                onClick={saveLocation}
+                disabled={!zipcodeInfo || savingLocation || zipcodeLoading}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 transition flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
+              >
+                {savedLocation ? '✓ Saved' : savingLocation ? '...' : 'Save'}
+              </button>
+            </div>
+            {zipcodeError && <p className="text-xs text-red-400 mt-1">{zipcodeError}</p>}
+          </div>
         </div>
 
         {/* Bio */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-semibold text-gray-900">Bio</h2>
-            <button
-              onClick={() => setChatOpen(true)}
-              className="text-xs text-[#7FB3FF] hover:underline flex items-center gap-1"
-            >
+            <button onClick={() => setChatOpen(true)}
+              className="text-xs text-[#7FB3FF] hover:underline flex items-center gap-1">
               <img src="/ruah-logo.png" className="w-4 h-4" />
               Write with Ruah!
             </button>
@@ -325,10 +404,8 @@ Your job:
 
       {/* AI Chat Panel */}
       {chatOpen && (
-        <div
-          className="fixed bottom-0 right-0 left-0 md:left-auto md:right-6 md:bottom-6 md:w-96 bg-white rounded-t-3xl md:rounded-3xl shadow-2xl z-50 flex flex-col"
-          style={{ height: '70vh', maxHeight: '600px' }}
-        >
+        <div className="fixed bottom-0 right-0 left-0 md:left-auto md:right-6 md:bottom-6 md:w-96 bg-white rounded-t-3xl md:rounded-3xl shadow-2xl z-50 flex flex-col"
+          style={{ height: '70vh', maxHeight: '600px' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 rounded-t-3xl"
             style={{ background: 'linear-gradient(135deg, #EAF4FF 0%, #FFF6F2 100%)' }}>
             <div className="flex items-center gap-2">
@@ -347,28 +424,22 @@ Your job:
                 {msg.role === 'assistant' && (
                   <img src="/ruah-logo.png" className="w-6 h-6 mr-2 flex-shrink-0 mt-1" />
                 )}
-                <div
-                  className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'text-white rounded-br-sm'
-                      : 'bg-gray-50 text-gray-800 rounded-bl-sm'
-                  }`}
-                  style={msg.role === 'user' ? { background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' } : {}}
-                >
-                  <ReactMarkdown
-                    components={{
-                      p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                    }}
-                  >
+                <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'text-white rounded-br-sm'
+                    : 'bg-gray-50 text-gray-800 rounded-bl-sm'
+                }`}
+                  style={msg.role === 'user' ? { background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' } : {}}>
+                  <ReactMarkdown components={{
+                    p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  }}>
                     {msg.content.replace('**[Use this bio]**', '')}
                   </ReactMarkdown>
                   {msg.role === 'assistant' && msg.content.includes('[Use this bio]') && (
-                    <button
-                      onClick={() => applyBio(msg.content)}
+                    <button onClick={() => applyBio(msg.content)}
                       className="mt-2 w-full text-white py-2 rounded-xl text-xs font-semibold"
-                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
-                    >
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
                       ✓ Use this bio & save
                     </button>
                   )}
@@ -399,12 +470,9 @@ Your job:
                 placeholder="Tell me about yourself..."
                 className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]"
               />
-              <button
-                onClick={() => sendMessage()}
-                disabled={!input.trim() || chatLoading}
+              <button onClick={() => sendMessage()} disabled={!input.trim() || chatLoading}
                 className="text-white w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40 flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
-              >
+                style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M22 2L11 13" stroke="white" strokeWidth="2" strokeLinecap="round"/>
                   <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" strokeWidth="2" strokeLinecap="round"/>
