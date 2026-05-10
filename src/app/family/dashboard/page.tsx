@@ -125,7 +125,11 @@ export default function FamilyDashboard() {
           <button onClick={() => router.push('/family/profile')}
             className="text-sm text-gray-600 hover:text-[#7FB3FF] transition">
             👋 {user?.full_name}
-            </button>
+          </button>
+          <button onClick={() => router.push('/messages')}
+            className="text-sm text-gray-400 hover:text-gray-600">
+            💬 Messages
+          </button>
           <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
       </header>
@@ -147,7 +151,11 @@ export default function FamilyDashboard() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="text-2xl mt-0.5">
-                      {n.type === 'new_match' ? '🎯' : n.type === 'caregiver_interested' ? '🎉' : n.type === 'new_application' ? '📩' : '📬'}
+                      {n.type === 'new_match' ? '🎯'
+                        : n.type === 'caregiver_interested' ? '🎉'
+                        : n.type === 'new_application' ? '📩'
+                        : n.type === 'message' ? '💬'
+                        : '📬'}
                     </div>
                     <div>
                       <div className="font-semibold text-gray-900 text-sm">{n.title}</div>
@@ -166,6 +174,15 @@ export default function FamilyDashboard() {
                     <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push('/family/chat') }}
                       className="flex-1 py-2 rounded-xl text-xs font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition">
                       💬 Chat with Ruah
+                    </button>
+                  </div>
+                )}
+                {n.type === 'message' && n.data?.senderId && (
+                  <div className="mt-3">
+                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/messages/${n.data.senderId}`) }}
+                      className="w-full text-white py-2 rounded-xl text-xs font-semibold"
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                      💬 Reply
                     </button>
                   </div>
                 )}
@@ -316,7 +333,7 @@ export default function FamilyDashboard() {
 
                     {m.status === 'accepted' && (
                       <div className="flex gap-2 mt-3">
-                        <button onClick={() => router.push(`/messages?with=${cp?.user_id}`)}
+                        <button onClick={() => router.push(`/messages/${cp?.user_id}`)}
                           className="flex-1 py-2 rounded-xl text-xs font-semibold text-white"
                           style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
                           💬 Message
@@ -399,7 +416,6 @@ function RequestCard({ request: r, onClose, onReopen, onViewApplications }: {
 
   return (
     <div className="rounded-xl border border-gray-100 overflow-hidden hover:border-gray-200 transition">
-      {/* Header */}
       <div className="flex items-center gap-3 p-3 cursor-pointer" onClick={() => setExpanded(p => !p)}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -425,7 +441,6 @@ function RequestCard({ request: r, onClose, onReopen, onViewApplications }: {
         <span className="text-gray-300 text-xs flex-shrink-0">{expanded ? '▲' : '▼'}</span>
       </div>
 
-      {/* Expanded */}
       {expanded && (
         <div className="px-3 pb-3 border-t border-gray-50">
           {r.ai_job_post && (

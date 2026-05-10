@@ -29,7 +29,6 @@ export default function CaregiverDashboard() {
         .order('created_at', { ascending: false })
         .limit(10)
 
-      // Fetch my applications
       let appsData: any[] = []
       if (caregiverData?.id) {
         const { data } = await supabase
@@ -39,6 +38,7 @@ export default function CaregiverDashboard() {
             service_requests (
               id, service_type, status, ai_job_post, created_at,
               family_profiles (
+                user_id,
                 users ( full_name, avatar_url )
               )
             )
@@ -113,7 +113,11 @@ export default function CaregiverDashboard() {
           <button onClick={() => router.push('/caregiver/profile')}
             className="text-sm text-gray-600 hover:text-[#7FB3FF] transition">
             👋 {user?.full_name}
-            </button>
+          </button>
+          <button onClick={() => router.push('/messages')}
+            className="text-sm text-gray-400 hover:text-gray-600">
+            💬 Messages
+          </button>
           <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
       </header>
@@ -135,7 +139,10 @@ export default function CaregiverDashboard() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="text-2xl mt-0.5">
-                      {n.type === 'new_match' ? '🎉' : n.type === 'application_accepted' ? '✅' : '📬'}
+                      {n.type === 'new_match' ? '🎉'
+                        : n.type === 'application_accepted' ? '✅'
+                        : n.type === 'message' ? '💬'
+                        : '📬'}
                     </div>
                     <div>
                       <div className="font-semibold text-gray-900 text-sm">{n.title}</div>
@@ -168,6 +175,24 @@ export default function CaregiverDashboard() {
                     ✓ You responded — waiting for family to confirm
                   </div>
                 )}
+                {n.type === 'application_accepted' && n.data?.requestId && (
+                  <div className="mt-3">
+                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/messages/${n.data.familyUserId}`) }}
+                      className="w-full text-white py-2 rounded-xl text-xs font-semibold"
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                      💬 Message Family
+                    </button>
+                  </div>
+                )}
+                {n.type === 'message' && n.data?.senderId && (
+                  <div className="mt-3">
+                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/messages/${n.data.senderId}`) }}
+                      className="w-full text-white py-2 rounded-xl text-xs font-semibold"
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                      💬 Reply
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -175,22 +200,18 @@ export default function CaregiverDashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <button
-            onClick={() => router.push('/caregiver/requests')}
+          <button onClick={() => router.push('/caregiver/requests')}
             className="p-6 rounded-2xl text-left transition"
             style={{
               background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)',
               boxShadow: '0 8px 32px rgba(127, 179, 255, 0.3)'
-            }}
-          >
+            }}>
             <div className="text-2xl mb-2">📋</div>
             <div className="font-semibold text-white">Browse Requests</div>
             <div className="text-sm text-white/70 mt-1">Find families looking for care</div>
           </button>
-          <button
-            onClick={() => router.push('/caregiver/profile')}
-            className="bg-white border border-gray-200 p-6 rounded-2xl text-left hover:border-[#7FB3FF] transition"
-          >
+          <button onClick={() => router.push('/caregiver/profile')}
+            className="bg-white border border-gray-200 p-6 rounded-2xl text-left hover:border-[#7FB3FF] transition">
             <div className="text-2xl mb-2">👤</div>
             <div className="font-semibold text-gray-900">My Profile</div>
             <div className="text-sm text-gray-400 mt-1">Edit your info & services</div>
@@ -225,6 +246,7 @@ export default function CaregiverDashboard() {
               {applications.map(app => {
                 const req = app.service_requests
                 const familyUser = req?.family_profiles?.users
+                const familyUserId = req?.family_profiles?.user_id
                 return (
                   <div key={app.id} className={`rounded-xl border p-3 transition ${
                     app.status === 'accepted' ? 'border-green-200 bg-green-50/20'
@@ -249,9 +271,9 @@ export default function CaregiverDashboard() {
                           {new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </div>
                       </div>
-                      {app.status === 'accepted' && (
+                      {app.status === 'accepted' && familyUserId && (
                         <button
-                          onClick={() => router.push(`/messages?with=${req?.family_profiles?.user_id}`)}
+                          onClick={() => router.push(`/messages/${familyUserId}`)}
                           className="text-xs px-3 py-1.5 rounded-lg text-white flex-shrink-0"
                           style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
                           💬 Message
