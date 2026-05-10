@@ -316,6 +316,41 @@ Your job:
           </div>
         </div>
 
+        {/* Availability — NEW */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900 mb-1">Availability</h2>
+              <p className="text-xs text-gray-400">
+                {profile?.availability_schedule
+                  ? `${Object.keys(profile.availability_schedule).length} days set`
+                  : "Not set yet — families can't see your schedule"}
+              </p>
+            </div>
+            <button
+              onClick={() => router.push('/caregiver/availability')}
+              className="text-sm text-[#7FB3FF] hover:underline font-medium"
+            >
+              {profile?.availability_schedule ? 'Edit' : 'Set up →'}
+            </button>
+          </div>
+          {profile?.availability_schedule && (
+            <div className="mt-3 space-y-1 pt-3 border-t border-gray-100">
+              {Object.entries(profile.availability_schedule).map(([day, times]: [string, any]) => (
+                <div key={day} className="flex justify-between text-xs text-gray-500">
+                  <span className="capitalize">{day}</span>
+                  <span>{times.start} – {times.end}</span>
+                </div>
+              ))}
+              {profile?.overnight_ok && (
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-xs text-purple-500">🌙 Open to overnight</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Bio */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
           <div className="flex items-center justify-between mb-2">
@@ -334,12 +369,9 @@ Your job:
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF] resize-none mb-3"
             placeholder="Hi! I'm an experienced caregiver who loves working with children..."
           />
-          <button
-            onClick={saveBio}
-            disabled={saving}
+          <button onClick={saveBio} disabled={saving}
             className="w-full text-white py-3 rounded-xl text-sm font-medium transition"
-            style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
-          >
+            style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
             {saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save Bio'}
           </button>
         </div>
@@ -425,9 +457,7 @@ Your job:
                   <img src="/ruah-logo.png" className="w-6 h-6 mr-2 flex-shrink-0 mt-1" />
                 )}
                 <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'text-white rounded-br-sm'
-                    : 'bg-gray-50 text-gray-800 rounded-bl-sm'
+                  msg.role === 'user' ? 'text-white rounded-br-sm' : 'bg-gray-50 text-gray-800 rounded-bl-sm'
                 }`}
                   style={msg.role === 'user' ? { background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' } : {}}>
                   <ReactMarkdown components={{
@@ -463,13 +493,10 @@ Your job:
 
           <div className="px-4 py-3 border-t border-gray-100">
             <div className="flex gap-2">
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
+              <input value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); sendMessage() } }}
                 placeholder="Tell me about yourself..."
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]"
-              />
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]" />
               <button onClick={() => sendMessage()} disabled={!input.trim() || chatLoading}
                 className="text-white w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40 flex-shrink-0"
                 style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
