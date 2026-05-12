@@ -8,12 +8,25 @@ export default function FamilyProfile() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+
+  // Avatar
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+
+  // Name editing
+  const [fullName, setFullName] = useState('')
+  const [editingName, setEditingName] = useState(false)
+  const [savingName, setSavingName] = useState(false)
+  const [savedName, setSavedName] = useState(false)
+
+  // Zipcode
   const [zipcode, setZipcode] = useState('')
   const [zipcodeInfo, setZipcodeInfo] = useState<{ city: string; state: string } | null>(null)
   const [zipcodeLoading, setZipcodeLoading] = useState(false)
   const [zipcodeError, setZipcodeError] = useState('')
   const [savingLocation, setSavingLocation] = useState(false)
   const [savedLocation, setSavedLocation] = useState(false)
+
   const router = useRouter()
   const supabase = createClient()
 
@@ -25,6 +38,8 @@ export default function FamilyProfile() {
       const { data: profileData } = await supabase.from('family_profiles').select('*').eq('user_id', authUser.id).single()
       setUser(userData)
       setProfile(profileData)
+      setFullName(userData?.full_name || '')
+      setAvatarUrl(userData?.avatar_url || null)
       setZipcode(userData?.zipcode || '')
       if (userData?.city && userData?.state) {
         setZipcodeInfo({ city: userData.city, state: userData.state })
@@ -33,6 +48,37 @@ export default function FamilyProfile() {
     }
     load()
   }, [])
+
+  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    setUploadingAvatar(true)
+    const ext = file.name.split('.').pop()
+    const path = `${user.id}/avatar.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      await supabase.from('users').update({ avatar_url: data.publicUrl }).eq('id', user.id)
+      setAvatarUrl(data.publicUrl)
+    }
+    setUploadingAvatar(false)
+  }
+
+  const removeAvatar = async () => {
+    await supabase.from('users').update({ avatar_url: null }).eq('id', user.id)
+    setAvatarUrl(null)
+  }
+
+  const saveName = async () => {
+    if (!fullName.trim()) return
+    setSavingName(true)
+    await supabase.from('users').update({ full_name: fullName.trim() }).eq('id', user.id)
+    setUser((prev: any) => ({ ...prev, full_name: fullName.trim() }))
+    setSavingName(false)
+    setSavedName(true)
+    setEditingName(false)
+    setTimeout(() => setSavedName(false), 2000)
+  }
 
   const lookupZipcode = async (zip: string) => {
     if (zip.length !== 5) { setZipcodeInfo(null); setZipcodeError(''); return }
@@ -92,7 +138,76 @@ export default function FamilyProfile() {
       <div className="max-w-2xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">My Profile</h1>
 
-        {/* Basic Info */}
+        {/* Avatar + Name */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4 flex items-center gap-4">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0 group">
+            <label className="cursor-pointer block">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-20 h-20 rounded-full object-cover" />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#7FB3FF] to-[#A78BFA] flex items-center justify-center text-3xl font-bold text-white">
+                  {user?.full_name?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                <span className="text-white text-xl">📷</span>
+              </div>
+              {uploadingAvatar && (
+                <div className="absolute inset-0 rounded-full bg-white/70 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-[#7FB3FF] border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
+            </label>
+          </div>
+
+          {/* Name + email */}
+          <div className="flex-1 min-w-0">
+            {editingName ? (
+              <div className="flex gap-2 mb-1">
+                <input
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveName() }}
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]"
+                  autoFocus
+                />
+                <button onClick={saveName} disabled={savingName}
+                  className="px-3 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40"
+                  style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                  {savingName ? '...' : 'Save'}
+                </button>
+                <button onClick={() => { setEditingName(false); setFullName(user?.full_name || '') }}
+                  className="px-3 py-2 rounded-xl text-sm border border-gray-200 text-gray-500">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-semibold text-gray-900">{user?.full_name}</span>
+                <button onClick={() => setEditingName(true)}
+                  className="text-xs text-[#7FB3FF] hover:underline">Edit</button>
+                {savedName && <span className="text-xs text-green-500">✓ Saved</span>}
+              </div>
+            )}
+            <p className="text-sm text-gray-400">{user?.email}</p>
+            <div className="mt-2 flex gap-3">
+              <label className="cursor-pointer text-xs text-[#7FB3FF] hover:underline">
+                {avatarUrl ? 'Change photo' : '+ Upload photo'}
+                <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
+              </label>
+              {avatarUrl && (
+                <button onClick={removeAvatar} className="text-xs text-red-400 hover:text-red-600">
+                  Remove photo
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-300 mt-0.5">JPG, PNG · Max 5MB</p>
+          </div>
+        </div>
+
+        {/* Basic Info — onboarding 数据保留 */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
           <h2 className="font-semibold text-gray-900 mb-4">Basic Info</h2>
           <div className="space-y-3">
@@ -143,12 +258,10 @@ export default function FamilyProfile() {
                   {!zipcodeLoading && zipcodeError && <span className="text-red-400">✕</span>}
                 </div>
               </div>
-              <button
-                onClick={saveLocation}
+              <button onClick={saveLocation}
                 disabled={!zipcodeInfo || savingLocation || zipcodeLoading}
                 className="px-4 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 transition flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
-              >
+                style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
                 {savedLocation ? '✓ Saved' : savingLocation ? '...' : 'Save'}
               </button>
             </div>
@@ -174,10 +287,8 @@ export default function FamilyProfile() {
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="font-semibold text-gray-900 mb-1">Update Your Needs</h2>
           <p className="text-sm text-gray-400 mb-4">Changed what you're looking for? Post a new request.</p>
-          <button
-            onClick={() => router.push('/family/post')}
-            className="w-full py-3 rounded-xl text-sm font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition"
-          >
+          <button onClick={() => router.push('/family/post')}
+            className="w-full py-3 rounded-xl text-sm font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition">
             Post a New Request →
           </button>
         </div>
