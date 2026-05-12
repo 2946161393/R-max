@@ -76,7 +76,6 @@ export default function CaregiverRequestsPage() {
       const { data: caregiverData } = await supabase
         .from('caregiver_profiles').select('*').eq('user_id', authUser.id).single()
 
-      // Step 1: fetch requests with family_profiles (no nested users join)
       const { data: requestsData } = await supabase
         .from('service_requests')
         .select(`
@@ -88,7 +87,6 @@ export default function CaregiverRequestsPage() {
         .neq('service_type', 'manual')
         .order('created_at', { ascending: false })
 
-      // Step 2: collect all family user_ids and fetch separately
       const familyUserIds = [...new Set(
         (requestsData || [])
           .map((r: any) => r.family_profiles?.user_id)
@@ -104,7 +102,6 @@ export default function CaregiverRequestsPage() {
         familyUsersData?.forEach((u: any) => { familyUsersMap[u.id] = u })
       }
 
-      // Step 3: enrich requests with family user data
       const enrichedRequests = (requestsData || []).map((r: any) => ({
         ...r,
         familyUser: familyUsersMap[r.family_profiles?.user_id] || null
@@ -122,7 +119,6 @@ export default function CaregiverRequestsPage() {
       setRequests(enrichedRequests)
       setMyApplications(myApps)
 
-      // Calculate distances
       if (userData?.zipcode) {
         const latLng = await getLatLng(userData.zipcode)
         if (latLng) {
@@ -298,7 +294,7 @@ export default function CaregiverRequestsPage() {
               return (
                 <div key={r.id} className="bg-white rounded-2xl border border-gray-100 hover:border-gray-200 transition overflow-hidden">
                   <div className="p-5">
-                    {/* Header row */}
+                    {/* Header row — 名字在上，service 在下 */}
                     <div className="flex items-start gap-3 mb-3">
                       {familyUser?.avatar_url ? (
                         <img src={familyUser.avatar_url}
@@ -310,23 +306,23 @@ export default function CaregiverRequestsPage() {
                       )}
 
                       <div className="flex-1 min-w-0">
+                        {/* 名字大加粗在上 */}
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-gray-900">
-                            {SERVICE_LABELS[r.service_type] || r.service_type}
+                            {displayName || 'A Family'}
                           </span>
-                          {r.schedule_type && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">
-                              {r.schedule_type === 'recurring' ? '🔄 Recurring' : '1️⃣ One-time'}
-                            </span>
-                          )}
                           {alreadyApplied && (
                             <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">✓ Applied</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400 flex-wrap">
-                          {displayName && <span>Posted by {displayName}</span>}
+                        {/* Service + 城市 + 距离 在下 */}
+                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-400 flex-wrap">
+                          <span>{SERVICE_LABELS[r.service_type] || r.service_type}</span>
+                          {r.schedule_type && (
+                            <span>· {r.schedule_type === 'recurring' ? '🔄 Recurring' : '1️⃣ One-time'}</span>
+                          )}
                           {familyUser?.city && (
-                            <span>{displayName ? '·' : ''} 📍 {familyUser.city}{familyUser.state ? `, ${familyUser.state}` : ''}</span>
+                            <span>· 📍 {familyUser.city}{familyUser.state ? `, ${familyUser.state}` : ''}</span>
                           )}
                           {distance !== undefined && (
                             <span className="text-[#7FB3FF] font-medium">· {distance < 1 ? '< 1' : Math.round(distance)} mi away</span>
