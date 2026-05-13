@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   const { caregiverUserId, familyUserId, familyNeeds, caregiverName, familyName } = await request.json()
   const supabase = await createClient()
 
-  // 1. 用 AI 生成给 caregiver 的消息
+  // 1. AI 生成消息
   const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   const aiData = await aiResponse.json()
   const message = aiData.content[0].text
 
-  // 2. 创建 match 记录
+  // 2. 获取 family profile 和 caregiver profile
   const { data: familyProfile } = await supabase
     .from('family_profiles')
     .select('id')
@@ -40,37 +40,73 @@ export async function POST(request: NextRequest) {
     .eq('user_id', caregiverUserId)
     .single()
 
-  if (familyProfile && caregiverProfile) {
-    // 先建一个 service_request
-    const { data: request_data } = await supabase
-      .from('service_requests')
-      .insert({
-        family_id: familyProfile.id,
-        service_type: 'childcare',
-        status: 'open',
-        ai_job_post: familyNeeds
-      })
-      .select()
-      .single()
-
-    if (request_data) {
-      await supabase.from('matches').insert({
-        request_id: request_data.id,
-        caregiver_id: caregiverProfile.id,
-        ai_reasoning: message,
-        status: 'pending'
-      })
-    }
+  if (!familyProfile || !caregiverProfile) {
+    return NextResponse.json({ success: false, error: 'Profile not found' }, { status: 400 })
   }
 
-  // 3. 给 caregiver 发通知
+  // 3. 创建 service_request
+  const { data: requestData } = await supabase
+    .from('service_requests')
+    .insert({
+      family_id: familyProfile.id,
+      service_type: 'manual',
+      status: 'open',
+      ai_job_post: familyNeeds
+    })
+    .select()
+    .single()
+
+  if (!requestData) {
+    return NextResponse.json({ success: false, error: 'Failed to create request' }, { status: 500 })
+  }
+
+  // 4. 创建 match — 跟 admin match 完全一样的结构
+  const { data: matchData } = await supabase
+    .from('matches')
+    .insert({
+      request_id: requestData.id,
+      caregiver_id: caregiverProfile.id,
+      ai_reasoning: message,
+      status: 'admin_matched',
+      expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+      family_interested: true,  // Family 已经通过 AI 表示感兴趣
+      caregiver_interested: null,  // 等待 caregiver 响应
+    })
+    .select()
+    .single()
+
+  const matchId = matchData?.id
+
+  // 5. 给 caregiver 发通知 — 跟 admin match 完全一样
   await supabase.from('notifications').insert({
     user_id: caregiverUserId,
     type: 'new_match',
-    title: `${familyName} is interested in you! 🎉`,
+    title: `A family wants to meet you! 🎯`,
     body: message,
-    data: { familyUserId, familyName, familyNeeds }
+    data: {
+      matchId,
+      adminMatch: false,
+      aiMatch: true,
+      familyUserId,
+      familyName,
+      requestId: requestData.id,
+    }
   })
 
-  return NextResponse.json({ success: true, message })
+  // 6. 给 family 发确认通知
+  await supabase.from('notifications').insert({
+    user_id: familyUserId,
+    type: 'new_match',
+    title: `We reached out to ${caregiverName} for you! 🎯`,
+    body: `Ruah sent your request to ${caregiverName}. You'll be notified when they respond!`,
+    data: {
+      matchId,
+      aiMatch: true,
+      caregiverUserId,
+      caregiverName,
+      requestId: requestData.id,
+    }
+  })
+
+  return NextResponse.json({ success: true, message, matchId })
 }
