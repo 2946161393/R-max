@@ -57,9 +57,38 @@ export default function FamilyDashboard() {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
   }
 
-  const updateMatchStatus = async (matchId: string, status: 'accepted' | 'declined') => {
-    await supabase.from('matches').update({ status }).eq('id', matchId)
-    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status } : m))
+  const triggerMutualMatch = async (matchId: string, caregiverUserId: string) => {
+    await supabase.from('matches').update({ status: 'accepted' }).eq('id', matchId)
+    await supabase.from('notifications').insert([
+      {
+        user_id: user.id,
+        type: 'mutual_match',
+        title: '🎉 It\'s a match!',
+        body: 'Both you and the caregiver are interested. You can now message each other!',
+        data: { matchId, caregiverUserId }
+      },
+      {
+        user_id: caregiverUserId,
+        type: 'mutual_match',
+        title: '🎉 It\'s a match!',
+        body: 'Both you and the family are interested. You can now message each other!',
+        data: { matchId, familyUserId: user.id }
+      }
+    ])
+    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status: 'accepted', family_interested: true } : m))
+  }
+
+  const updateMatchInterest = async (matchId: string, interested: boolean) => {
+    await supabase.from('matches').update({ family_interested: interested }).eq('id', matchId)
+    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, family_interested: interested } : m))
+
+    if (interested) {
+      const { data: matchData } = await supabase
+        .from('matches').select('*, caregiver_profiles(user_id)').eq('id', matchId).single()
+      if (matchData?.caregiver_interested === true) {
+        await triggerMutualMatch(matchId, matchData.caregiver_profiles?.user_id)
+      }
+    }
   }
 
   const closeRequest = async (requestId: string) => {
@@ -90,7 +119,6 @@ export default function FamilyDashboard() {
   )
 
   const unreadCount = notifications.filter(n => !n.read).length
-  const pendingMatches = matches.filter(m => m.status === 'admin_matched' || m.status === 'pending')
   const hasOpenRequest = requests.some(r => r.status === 'open')
 
   const EXPERIENCE_LABELS: Record<string, string> = {
@@ -111,9 +139,7 @@ export default function FamilyDashboard() {
           <button onClick={() => router.push('/family/profile')} className="text-sm text-gray-600 hover:text-[#7FB3FF] transition">
             👋 {user?.full_name}
           </button>
-          <button onClick={() => router.push('/messages')} className="text-sm text-gray-400 hover:text-gray-600">
-            💬 Messages
-          </button>
+          <button onClick={() => router.push('/messages')} className="text-sm text-gray-400 hover:text-gray-600">💬 Messages</button>
           <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
       </header>
@@ -124,6 +150,7 @@ export default function FamilyDashboard() {
           <p className="text-gray-400 mt-1">Find the perfect care for your family</p>
         </div>
 
+        {/* Unread notifications */}
         {notifications.filter(n => !n.read).length > 0 && (
           <div className="mb-6 space-y-3">
             {notifications.filter(n => !n.read).map(n => (
@@ -132,7 +159,12 @@ export default function FamilyDashboard() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="text-2xl mt-0.5">
-                      {n.type === 'new_match' ? '🎯' : n.type === 'caregiver_interested' ? '🎉' : n.type === 'new_application' ? '📩' : n.type === 'message' ? '💬' : '📬'}
+                      {n.type === 'new_match' ? '🎯'
+                        : n.type === 'mutual_match' ? '🎉'
+                        : n.type === 'caregiver_interested' ? '🎉'
+                        : n.type === 'new_application' ? '📩'
+                        : n.type === 'message' ? '💬'
+                        : '📬'}
                     </div>
                     <div>
                       <div className="font-semibold text-gray-900 text-sm">{n.title}</div>
@@ -141,16 +173,21 @@ export default function FamilyDashboard() {
                   </div>
                   <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1" />
                 </div>
-                {(n.type === 'new_match' || n.type === 'caregiver_interested') && n.data?.caregiverUserId && (
+                {n.type === 'new_match' && n.data?.caregiverUserId && (
                   <div className="mt-3 flex gap-2">
                     <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/caregiver/${n.data.caregiverUserId}`) }}
                       className="flex-1 text-white py-2 rounded-xl text-xs font-semibold"
                       style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
                       👤 View Profile
                     </button>
-                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push('/family/chat') }}
-                      className="flex-1 py-2 rounded-xl text-xs font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition">
-                      💬 Chat with Ruah
+                  </div>
+                )}
+                {n.type === 'mutual_match' && n.data?.caregiverUserId && (
+                  <div className="mt-3">
+                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/messages/${n.data.caregiverUserId}`) }}
+                      className="w-full text-white py-2 rounded-xl text-xs font-semibold"
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                      💬 Start Chatting
                     </button>
                   </div>
                 )}
@@ -168,9 +205,10 @@ export default function FamilyDashboard() {
           </div>
         )}
 
+        {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <button
-            onClick={() => { if (hasOpenRequest) { alert('You already have an open request. Please close it before posting a new one.') } else { router.push('/family/post') } }}
+            onClick={() => { if (hasOpenRequest) { alert('You already have an open request.') } else { router.push('/family/post') } }}
             className="p-6 rounded-2xl text-left transition"
             style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)', boxShadow: '0 8px 32px rgba(127, 179, 255, 0.3)' }}>
             <div className="text-2xl mb-2">✍️</div>
@@ -191,7 +229,7 @@ export default function FamilyDashboard() {
               <div className="text-2xl">💡</div>
               <div className="flex-1">
                 <div className="font-semibold text-gray-900 text-sm">Ready to find your caregiver?</div>
-                <div className="text-xs text-gray-500 mt-1">We already have your needs from onboarding. Post your request in one click!</div>
+                <div className="text-xs text-gray-500 mt-1">Post your request and our team will start matching!</div>
                 <button onClick={() => router.push('/family/post')}
                   className="mt-3 text-white px-4 py-2 rounded-xl text-xs font-semibold transition"
                   style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
@@ -207,12 +245,15 @@ export default function FamilyDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <h2 className="font-semibold text-gray-900">My Matches</h2>
-              {pendingMatches.length > 0 && (
-                <span className="bg-[#7FB3FF] text-white text-xs px-2 py-0.5 rounded-full">{pendingMatches.length} new</span>
+              {matches.filter(m => m.family_interested === null && (m.status === 'admin_matched' || m.status === 'pending')).length > 0 && (
+                <span className="bg-[#7FB3FF] text-white text-xs px-2 py-0.5 rounded-full">
+                  {matches.filter(m => m.family_interested === null && (m.status === 'admin_matched' || m.status === 'pending')).length} new
+                </span>
               )}
             </div>
             <span className="text-xs text-gray-400">{matches.length} total</span>
           </div>
+
           {matches.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <div className="text-3xl mb-2">🎯</div>
@@ -224,9 +265,17 @@ export default function FamilyDashboard() {
               {matches.map(m => {
                 const cp = m.caregiver_profiles
                 const caregiverUser = cp?.users
-                const isPending = m.status === 'admin_matched' || m.status === 'pending'
+                const isPending = m.family_interested === null && (m.status === 'admin_matched' || m.status === 'pending')
+                const familyAccepted = m.family_interested === true
+                const isMutual = m.status === 'accepted'
+
                 return (
-                  <div key={m.id} className={`rounded-xl border p-4 transition ${isPending ? 'border-[#7FB3FF]/40 bg-blue-50/20' : m.status === 'accepted' ? 'border-green-200 bg-green-50/20' : 'border-gray-100'}`}>
+                  <div key={m.id} className={`rounded-xl border p-4 transition ${
+                    isMutual ? 'border-green-200 bg-green-50/20'
+                    : familyAccepted ? 'border-yellow-200 bg-yellow-50/20'
+                    : m.family_interested === false ? 'border-gray-100 opacity-50'
+                    : 'border-[#7FB3FF]/40 bg-blue-50/20'
+                  }`}>
                     <div className="flex items-start gap-3">
                       {caregiverUser?.avatar_url
                         ? <img src={caregiverUser.avatar_url} className="w-12 h-12 rounded-full object-cover flex-shrink-0" alt="" />
@@ -238,8 +287,13 @@ export default function FamilyDashboard() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-gray-900 text-sm">{caregiverUser?.full_name || 'Caregiver'}</span>
                           {cp?.is_verified && <span className="text-xs bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full">✓ Verified</span>}
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${m.status === 'accepted' ? 'bg-green-100 text-green-600' : m.status === 'declined' ? 'bg-red-100 text-red-500' : 'bg-blue-100 text-blue-500'}`}>
-                            {m.status === 'admin_matched' ? '✨ New match!' : m.status}
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            isMutual ? 'bg-green-100 text-green-600'
+                            : familyAccepted ? 'bg-yellow-100 text-yellow-600'
+                            : m.family_interested === false ? 'bg-gray-100 text-gray-500'
+                            : 'bg-blue-100 text-blue-500'
+                          }`}>
+                            {isMutual ? '🎉 Matched!' : familyAccepted ? '⏳ Waiting for caregiver' : m.family_interested === false ? 'Passed' : '✨ New match'}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-x-3 mt-1">
@@ -254,9 +308,17 @@ export default function FamilyDashboard() {
                         )}
                       </div>
                     </div>
+
+                    {/* Expires countdown */}
+                    {isPending && m.expires_at && (
+                      <div className="mt-2 text-xs text-gray-400">
+                        ⏰ Expires {new Date(m.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    )}
+
                     {isPending && (
                       <div className="flex gap-2 mt-3">
-                        <button onClick={() => updateMatchStatus(m.id, 'accepted')}
+                        <button onClick={() => updateMatchInterest(m.id, true)}
                           className="flex-1 py-2 rounded-xl text-xs font-semibold text-white"
                           style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
                           ✓ I'm Interested
@@ -265,13 +327,20 @@ export default function FamilyDashboard() {
                           className="flex-1 py-2 rounded-xl text-xs font-medium border border-gray-200 text-gray-600 hover:border-[#7FB3FF] hover:text-[#7FB3FF] transition">
                           👤 View Profile
                         </button>
-                        <button onClick={() => updateMatchStatus(m.id, 'declined')}
+                        <button onClick={() => updateMatchInterest(m.id, false)}
                           className="px-4 py-2 rounded-xl text-xs font-medium border border-gray-100 text-gray-400 hover:border-red-200 hover:text-red-400 transition">
                           ✕
                         </button>
                       </div>
                     )}
-                    {m.status === 'accepted' && (
+
+                    {familyAccepted && !isMutual && (
+                      <div className="mt-3 px-3 py-2 bg-yellow-50 rounded-xl text-xs text-yellow-600 text-center">
+                        ⏳ Waiting for caregiver to respond...
+                      </div>
+                    )}
+
+                    {isMutual && (
                       <div className="flex gap-2 mt-3">
                         <button onClick={() => router.push(`/messages/${cp?.user_id}`)}
                           className="flex-1 py-2 rounded-xl text-xs font-semibold text-white"
@@ -327,7 +396,7 @@ export default function FamilyDashboard() {
             <img src="/ruah-logo.png" alt="Ruah" className="w-12 h-12 flex-shrink-0" />
             <div>
               <div className="font-semibold text-gray-900">Hi, I'm Ruah! Your AI Assistant ✨</div>
-              <div className="text-sm text-gray-500 mt-1">Let me help you write your job post, find the best matches, and prepare interview questions.</div>
+              <div className="text-sm text-gray-500 mt-1">Let me help you write your job post and prepare interview questions.</div>
               <button onClick={() => router.push('/family/chat')}
                 className="mt-3 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
                 style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
@@ -350,12 +419,7 @@ function formatTime(t: string) {
 }
 
 function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplications, onEdit }: {
-  request: any
-  onClose: () => void
-  onReopen: () => void
-  onDelete: () => void
-  onViewApplications: () => void
-  onEdit: () => void
+  request: any; onClose: () => void; onReopen: () => void; onDelete: () => void; onViewApplications: () => void; onEdit: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const applicationCount = r.applications?.length || 0
@@ -368,7 +432,6 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            {/* Service + status + type */}
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <span className="font-semibold text-gray-900 capitalize">{r.service_type}</span>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -382,18 +445,16 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
                 </span>
               )}
             </div>
-
-            {/* Structured info */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-3">
               {(r.pay_min || r.pay_max) && (
                 <div className="flex items-center gap-1.5 text-gray-700">
-                  <span className="text-gray-400">💰</span>
+                  <span>💰</span>
                   <span className="font-medium">${r.pay_min}{r.pay_max ? `–$${r.pay_max}` : '+'}/hr</span>
                 </div>
               )}
               {r.start_date && (
                 <div className="flex items-center gap-1.5 text-gray-700">
-                  <span className="text-gray-400">📅</span>
+                  <span>📅</span>
                   <span>Starts {new Date(r.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 </div>
               )}
@@ -408,8 +469,6 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
                 <span>Posted {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
               </div>
             </div>
-
-            {/* Schedule */}
             {sortedDays.length > 0 && (
               <div className="mb-3">
                 <div className="text-xs text-gray-400 mb-1.5">Schedule</div>
@@ -426,8 +485,6 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
                 </div>
               </div>
             )}
-
-            {/* Languages */}
             {r.languages?.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2">
                 {r.languages.map((lang: string) => (
@@ -435,8 +492,6 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
                 ))}
               </div>
             )}
-
-            {/* Requirements */}
             {r.requirements?.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
                 {r.requirements.map((req: string) => (
@@ -445,21 +500,16 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
               </div>
             )}
           </div>
-
           <button onClick={() => setExpanded(p => !p)} className="text-gray-300 text-xs flex-shrink-0 mt-1">
             {expanded ? '▲' : '▼'}
           </button>
         </div>
-
-        {/* Job description expanded */}
         {expanded && r.ai_job_post && (
           <div className="border-t border-gray-50 pt-3 mb-3">
             <div className="text-xs text-gray-400 mb-1">Job description</div>
             <p className="text-sm text-gray-600 leading-relaxed">{r.ai_job_post}</p>
           </div>
         )}
-
-        {/* Action buttons */}
         <div className="flex gap-2 flex-wrap border-t border-gray-50 pt-3">
           {applicationCount > 0 && (
             <button onClick={onViewApplications}

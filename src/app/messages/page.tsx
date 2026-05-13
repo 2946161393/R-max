@@ -34,7 +34,7 @@ export default function MessagesPage() {
       // Group by conversation partner
       const convMap = new Map<string, any>()
       for (const msg of messages || []) {
-        const partner = msg.sender_id === authUser.id ? msg.receiver : msg.sender
+        const partner: any = msg.sender_id === authUser.id ? msg.receiver : msg.sender
         if (!partner) continue
         const partnerId = partner.id
         if (!convMap.has(partnerId)) {

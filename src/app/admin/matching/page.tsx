@@ -32,12 +32,8 @@ export default function AdminMatching() {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (familyRef.current && !familyRef.current.contains(e.target as Node)) {
-        setFamilyDropdownOpen(false)
-      }
-      if (caregiverRef.current && !caregiverRef.current.contains(e.target as Node)) {
-        setCaregiverDropdownOpen(false)
-      }
+      if (familyRef.current && !familyRef.current.contains(e.target as Node)) setFamilyDropdownOpen(false)
+      if (caregiverRef.current && !caregiverRef.current.contains(e.target as Node)) setCaregiverDropdownOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -70,7 +66,8 @@ export default function AdminMatching() {
           id, full_name, email, avatar_url, created_at,
           caregiver_profiles (
             id, services, languages, hourly_rate_min, hourly_rate_max,
-            years_experience, bio, is_verified, background_check_status, onboarding_answers
+            years_experience, bio, is_verified, background_check_status,
+            onboarding_answers, matching_status, last_active_at, match_no_response_count
           )
         `)
         .eq('role', 'caregiver')
@@ -147,37 +144,49 @@ export default function AdminMatching() {
           request_id: reqData.id,
           caregiver_id: caregiverProfile?.id,
           status: 'admin_matched',
-          ai_reasoning: manualNote || 'Manually matched by admin'
+          ai_reasoning: manualNote || 'Manually matched by admin',
+          expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+          family_interested: null,
+          caregiver_interested: null,
         }).select().single()
 
         const matchId = matchData?.id
 
+        // Notify caregiver — "A family wants to meet you"
         await supabase.from('notifications').insert([
           {
             user_id: caregiver.id,
             type: 'new_match',
-            title: `${selectedFamily.full_name} is interested in you! 🎉`,
-            body: manualNote || `The Ruah team has matched you with ${selectedFamily.full_name}.`,
+            title: `A family wants to meet you! 🎯`,
+            body: manualNote || `The Ruah team thinks you'd be a great fit. Respond within 48 hours!`,
             data: {
               matchId,
               adminMatch: true,
               familyUserId: selectedFamily.id,
               familyName: selectedFamily.full_name,
+              requestId: reqData.id,
             }
           },
+          // Notify family — "We found a match"
           {
             user_id: selectedFamily.id,
             type: 'new_match',
-            title: `We found a great match for you! 🎉`,
-            body: `The Ruah team has matched you with ${caregiver.full_name}.`,
+            title: `We found a great match for you! 🎯`,
+            body: manualNote || `The Ruah team has matched you with ${caregiver.full_name}. Let us know if you're interested within 48 hours!`,
             data: {
               matchId,
               adminMatch: true,
               caregiverUserId: caregiver.id,
               caregiverName: caregiver.full_name,
+              requestId: reqData.id,
             }
           }
         ])
+
+        // Update caregiver match_no_response_count tracking
+        await supabase.from('caregiver_profiles')
+          .update({ last_active_at: new Date().toISOString() })
+          .eq('user_id', caregiver.id)
       }
     }
 
@@ -189,6 +198,22 @@ export default function AdminMatching() {
     setManualNote('')
     setCreating(false)
     alert(`✅ ${selectedCaregivers.length} match${selectedCaregivers.length > 1 ? 'es' : ''} created: ${selectedFamily.full_name} ↔ ${names}`)
+  }
+
+  const matchingStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'text-green-400'
+      case 'paused': return 'text-yellow-400'
+      case 'inactive': return 'text-red-400'
+      default: return 'text-gray-500'
+    }
+  }
+
+  const matchingStatusLabel = (status: string, noResponseCount: number) => {
+    if (status === 'paused') return '🟡 Paused'
+    if (status === 'inactive') return '🔴 Inactive'
+    if (noResponseCount >= 2) return '🟡 Unresponsive'
+    return '🟢 Active'
   }
 
   const statusColor = (status: string) => {
@@ -214,12 +239,14 @@ export default function AdminMatching() {
         <p className="text-gray-400 mt-1">View all matches and manually create new ones</p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      {/* Stats */}
+      <div className="grid grid-cols-5 gap-4 mb-8">
         {[
           { label: 'Total Matches', value: matches.length, icon: '🎯' },
-          { label: 'Pending', value: matches.filter(m => m.status === 'pending').length, icon: '⏳' },
-          { label: 'Accepted', value: matches.filter(m => m.status === 'accepted').length, icon: '✅' },
-          { label: 'Admin Matched', value: matches.filter(m => m.status === 'admin_matched').length, icon: '👑' },
+          { label: 'Pending', value: matches.filter(m => m.status === 'admin_matched').length, icon: '⏳' },
+          { label: 'Mutual', value: matches.filter(m => m.status === 'accepted').length, icon: '🎉' },
+          { label: 'Declined', value: matches.filter(m => m.status === 'declined').length, icon: '✕' },
+          { label: 'Active Caregivers', value: caregivers.filter(c => c.caregiver_profiles?.matching_status !== 'inactive').length, icon: '🟢' },
         ].map(stat => (
           <div key={stat.label} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
             <div className="text-xl mb-2">{stat.icon}</div>
@@ -229,11 +256,12 @@ export default function AdminMatching() {
         ))}
       </div>
 
+      {/* Create Match */}
       <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 mb-8">
         <h2 className="font-semibold text-white mb-6">👑 Create Manual Match</h2>
 
         <div className="grid grid-cols-2 gap-6 mb-4">
-          {/* Family */}
+          {/* Family selector */}
           <div ref={familyRef}>
             <label className="text-xs text-gray-400 mb-2 block">
               Select Family
@@ -273,10 +301,7 @@ export default function AdminMatching() {
                       }
                     </div>
                     <div className="px-3 py-2 border-t border-gray-700 bg-gray-800/80">
-                      <span className="text-xs text-gray-500">
-                        {filteredFamilies.length} of {families.length} families
-                        {familySearch && ` matching "${familySearch}"`}
-                      </span>
+                      <span className="text-xs text-gray-500">{filteredFamilies.length} of {families.length} families</span>
                     </div>
                   </div>
                 )}
@@ -284,7 +309,7 @@ export default function AdminMatching() {
             )}
           </div>
 
-          {/* Caregivers multi-select */}
+          {/* Caregiver multi-select */}
           <div ref={caregiverRef}>
             <label className="text-xs text-gray-400 mb-2 block">
               Select Caregivers
@@ -319,44 +344,47 @@ export default function AdminMatching() {
                     {filteredCaregivers.length === 0
                       ? <div className="px-4 py-3 text-sm text-gray-500 text-center">No caregivers found</div>
                       : filteredCaregivers.map(c => {
-                        const isSelected = selectedCaregivers.some(x => x.id === c.id)
-                        return (
-                          <button key={c.id} onClick={() => { toggleCaregiver(c); setCaregiverSearch('') }}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 transition text-left ${isSelected ? 'bg-emerald-500/10' : 'hover:bg-gray-700'}`}>
-                            {c.avatar_url
-                              ? <img src={c.avatar_url} className="w-8 h-8 rounded-full object-cover flex-shrink-0" alt="" />
-                              : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                                  {c.full_name?.[0]?.toUpperCase() || '?'}
+                          const isSelected = selectedCaregivers.some(x => x.id === c.id)
+                          const cp = c.caregiver_profiles
+                          const status = cp?.matching_status || 'active'
+                          const noResp = cp?.match_no_response_count || 0
+                          return (
+                            <button key={c.id} onClick={() => { toggleCaregiver(c); setCaregiverSearch('') }}
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 transition text-left ${isSelected ? 'bg-emerald-500/10' : 'hover:bg-gray-700'}`}>
+                              {c.avatar_url
+                                ? <img src={c.avatar_url} className="w-8 h-8 rounded-full object-cover flex-shrink-0" alt="" />
+                                : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                                    {c.full_name?.[0]?.toUpperCase() || '?'}
+                                  </div>
+                              }
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-white truncate">{c.full_name}</span>
+                                  {cp?.is_verified && <span className="text-xs text-green-400 flex-shrink-0">✓</span>}
+                                  <span className={`text-xs flex-shrink-0 ${matchingStatusColor(status)}`}>
+                                    {matchingStatusLabel(status, noResp)}
+                                  </span>
                                 </div>
-                            }
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-white truncate">{c.full_name}</span>
-                                {c.caregiver_profiles?.is_verified && <span className="text-xs text-green-400 flex-shrink-0">✓</span>}
+                                <div className="text-xs text-gray-400 truncate">
+                                  {c.email}
+                                  {cp?.services?.length > 0 && (
+                                    <span className="ml-1.5 text-gray-500">· {cp.services.join(', ')}</span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-400 truncate">
-                                {c.email}
-                                {c.caregiver_profiles?.services?.length > 0 && (
-                                  <span className="ml-1.5 text-gray-500">· {c.caregiver_profiles.services.join(', ')}</span>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {caregiverMatchCounts[c.id] > 0 && (
+                                  <span className="text-xs text-emerald-400">{caregiverMatchCounts[c.id]} matches</span>
                                 )}
+                                {isSelected && <span className="text-emerald-400 text-sm">✓</span>}
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {caregiverMatchCounts[c.id] > 0 && (
-                                <span className="text-xs text-emerald-400">{caregiverMatchCounts[c.id]} matches</span>
-                              )}
-                              {isSelected && <span className="text-emerald-400 text-sm">✓</span>}
-                            </div>
-                          </button>
-                        )
-                      })
+                            </button>
+                          )
+                        })
                     }
                   </div>
                   <div className="px-3 py-2 border-t border-gray-700 bg-gray-800/80">
-                    <span className="text-xs text-gray-500">
-                      {filteredCaregivers.length} of {caregivers.length} caregivers
-                      {caregiverSearch && ` matching "${caregiverSearch}"`}
-                    </span>
+                    <span className="text-xs text-gray-500">{filteredCaregivers.length} of {caregivers.length} caregivers</span>
                   </div>
                 </div>
               )}
@@ -383,14 +411,12 @@ export default function AdminMatching() {
           onClick={createManualMatch}
           disabled={!selectedFamily || selectedCaregivers.length === 0 || creating}
           className="px-6 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 transition"
-          style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}
-        >
+          style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
           {creating
             ? 'Creating...'
             : selectedCaregivers.length > 1
               ? `✨ Create ${selectedCaregivers.length} Matches & Notify All Parties`
-              : '✨ Create Match & Notify Both Parties'
-          }
+              : '✨ Create Match & Notify Both Parties'}
         </button>
       </div>
 
@@ -405,16 +431,34 @@ export default function AdminMatching() {
           )}
           {matches.map(m => {
             const family = m.service_requests?.family_profiles
+            const familyInterested = m.family_interested
+            const caregiverInterested = m.caregiver_interested
+            const isMutual = m.status === 'accepted'
+
             return (
               <div key={m.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-800/50 transition">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="text-sm text-white font-medium">{family?.users?.full_name || 'Unknown Family'}</span>
-                    <span className="text-gray-500">→</span>
+                    <span className="text-gray-500">↔</span>
                     <span className="text-sm text-[#7FB3FF] font-medium">Caregiver</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${statusColor(m.status)}`}>{m.status}</span>
+                    {isMutual && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">🎉 Mutual</span>}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{m.ai_reasoning}</div>
+                  {/* Interest status */}
+                  <div className="flex gap-3 text-xs mt-1">
+                    <span className={familyInterested === true ? 'text-green-400' : familyInterested === false ? 'text-red-400' : 'text-gray-500'}>
+                      Family: {familyInterested === true ? '✓ Interested' : familyInterested === false ? '✕ Passed' : '⏳ Pending'}
+                    </span>
+                    <span className={caregiverInterested === true ? 'text-green-400' : caregiverInterested === false ? 'text-red-400' : 'text-gray-500'}>
+                      Caregiver: {caregiverInterested === true ? '✓ Interested' : caregiverInterested === false ? '✕ Passed' : '⏳ Pending'}
+                    </span>
+                    {m.expires_at && !isMutual && (
+                      <span className="text-gray-600">
+                        Expires {new Date(m.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-gray-600 mt-0.5">
                     {new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </div>
@@ -423,7 +467,7 @@ export default function AdminMatching() {
                   {m.status !== 'accepted' && (
                     <button onClick={() => updateMatchStatus(m.id, 'accepted')}
                       className="text-xs px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition">
-                      ✅ Approve
+                      ✅ Force Approve
                     </button>
                   )}
                   {m.status !== 'declined' && (
@@ -545,6 +589,11 @@ function CaregiverCard({ person, matchCount, onClear }: { person: any; matchCoun
         <span className={`text-xs px-2 py-0.5 rounded-full ${matchCount > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700 text-gray-500'}`}>
           {matchCount} {matchCount === 1 ? 'match' : 'matches'}
         </span>
+        {profile?.matching_status && (
+          <span className={`text-xs ${profile.matching_status === 'active' ? 'text-green-400' : profile.matching_status === 'paused' ? 'text-yellow-400' : 'text-red-400'}`}>
+            {profile.matching_status === 'active' ? '🟢 Active' : profile.matching_status === 'paused' ? '🟡 Paused' : '🔴 Inactive'}
+          </span>
+        )}
       </div>
       {profile && (
         <div className="space-y-1.5 text-xs">
@@ -555,10 +604,13 @@ function CaregiverCard({ person, matchCount, onClear }: { person: any; matchCoun
             { label: 'Rate', value: profile.hourly_rate_min && profile.hourly_rate_max ? `$${profile.hourly_rate_min}–$${profile.hourly_rate_max}/hr` : null },
             { label: 'Availability', value: answers.availability },
             { label: 'Live-in', value: answers.living },
+            { label: 'No-response count', value: profile.match_no_response_count > 0 ? `${profile.match_no_response_count} times` : null },
           ].map(({ label, value }) => (
             <div key={label} className="flex justify-between">
               <span className="text-gray-500">{label}</span>
-              <span className="text-gray-300">{value || '—'}</span>
+              <span className={`text-gray-300 ${label === 'No-response count' && profile.match_no_response_count >= 2 ? 'text-yellow-400' : ''}`}>
+                {value || '—'}
+              </span>
             </div>
           ))}
           <div className="flex justify-between">
