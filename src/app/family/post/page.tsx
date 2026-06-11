@@ -5,14 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const SERVICE_OPTIONS = [
-  { value: 'childcare', label: '👶 Childcare / Nanny' },
-  { value: 'babysitter', label: '🍼 Babysitter (short-term)' },
-  { value: 'elder_care', label: '🏥 Elder Care' },
-  { value: 'housekeeping', label: '🏠 Housekeeping / 阿姨' },
-  { value: 'chef', label: '👨‍🍳 Personal Chef' },
-  { value: 'pet_care', label: '🐾 Pet Care' },
-  { value: 'tutoring', label: '📚 Tutoring' },
-  { value: 'postpartum', label: '🌸 Postpartum / 月嫂' },
+  { value: 'childcare', label: 'Childcare' },
+  { value: 'elder_care', label: 'Senior Care' },
+  { value: 'housekeeping', label: 'Housekeeping' },
+  { value: 'chef', label: 'Personal Chef' },
+  { value: 'pet_care', label: 'Pet Care' },
+  { value: 'tutoring', label: 'Tutoring' },
 ]
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
