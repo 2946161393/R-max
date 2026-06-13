@@ -105,7 +105,21 @@ export default function ChatPage() {
         body: content.slice(0, 100),
         data: { senderId: user.id, senderName: user.full_name }
       })
+    
+      // If caregiver sent a message to a family, trigger AI auto-reply
+      if (user.role === 'caregiver' && partner?.role === 'family') {
+        fetch('/api/ai-autoreply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messageContent: content,
+            familyUserId: partnerId,
+            caregiverUserId: user.id,
+          })
+        })
+      }
     }
+
     setSending(false)
   }
 

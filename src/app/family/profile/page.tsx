@@ -4,22 +4,75 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
+function QuickRepliesCard({ profileId, initialReplies }: { profileId: string; initialReplies: Record<string, string> }) {
+  const supabase = createClient()
+  const [replies, setReplies] = useState<Record<string, string>>(initialReplies)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const FAQ_FIELDS = [
+    { key: 'num_children', label: 'How many children?', placeholder: 'e.g. 2 children, ages 3 and 5' },
+    { key: 'schedule', label: 'What is the schedule?', placeholder: 'e.g. Mon–Fri, 8am–6pm' },
+    { key: 'location', label: 'Where are you located?', placeholder: 'e.g. Northwest DC, near Tenleytown' },
+    { key: 'live_in', label: 'Live-in or commute?', placeholder: 'e.g. Commute only' },
+    { key: 'driving', label: 'Is driving required?', placeholder: 'e.g. Yes, must have a valid license' },
+    { key: 'languages', label: 'Language preference?', placeholder: 'e.g. Mandarin preferred but not required' },
+    { key: 'start_date', label: 'When do you need to start?', placeholder: 'e.g. ASAP or June 1st' },
+  ]
+
+  const save = async () => {
+    if (!profileId) return
+    setSaving(true)
+    await supabase.from('family_profiles').update({ auto_replies: replies }).eq('id', profileId)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
+      <h2 className="font-semibold text-gray-900 mb-1">Quick Replies</h2>
+      <p className="text-sm text-gray-400 mb-4">
+        Set answers to common questions. Ruah AI will use these to automatically reply to caregivers on your behalf.
+      </p>
+      <div className="space-y-3">
+        {FAQ_FIELDS.map(field => (
+          <div key={field.key}>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{field.label}</label>
+            <input
+              type="text"
+              value={replies[field.key] || ''}
+              onChange={e => setReplies(prev => ({ ...prev, [field.key]: e.target.value }))}
+              placeholder={field.placeholder}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7FB3FF]"
+            />
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={save}
+        disabled={saving}
+        className="mt-4 w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition"
+        style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+        {saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save Quick Replies'}
+      </button>
+    </div>
+  )
+}
+
 export default function FamilyProfile() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
-  // Name editing
   const [fullName, setFullName] = useState('')
   const [editingName, setEditingName] = useState(false)
   const [savingName, setSavingName] = useState(false)
   const [savedName, setSavedName] = useState(false)
 
-  // Zipcode
   const [zipcode, setZipcode] = useState('')
   const [zipcodeInfo, setZipcodeInfo] = useState<{ city: string; state: string } | null>(null)
   const [zipcodeLoading, setZipcodeLoading] = useState(false)
@@ -140,7 +193,6 @@ export default function FamilyProfile() {
 
         {/* Avatar + Name */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4 flex items-center gap-4">
-          {/* Avatar */}
           <div className="relative flex-shrink-0 group">
             <label className="cursor-pointer block">
               {avatarUrl ? (
@@ -162,7 +214,6 @@ export default function FamilyProfile() {
             </label>
           </div>
 
-          {/* Name + email */}
           <div className="flex-1 min-w-0">
             {editingName ? (
               <div className="flex gap-2 mb-1">
@@ -207,7 +258,7 @@ export default function FamilyProfile() {
           </div>
         </div>
 
-        {/* Basic Info — onboarding 数据保留 */}
+        {/* Basic Info */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
           <h2 className="font-semibold text-gray-900 mb-4">Basic Info</h2>
           <div className="space-y-3">
@@ -282,6 +333,12 @@ export default function FamilyProfile() {
             </div>
           </div>
         )}
+
+        {/* Quick Replies */}
+        <QuickRepliesCard
+          profileId={profile?.id}
+          initialReplies={profile?.auto_replies || {}}
+        />
 
         {/* Post new request */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
