@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+const ADMIN_EMAILS = ['zwang168@seas.upenn.edu', 'zijinwang97@gmail.com', 'zijinwang168@gmail.com']
+
 const EXPERIENCE_LABELS: Record<string, string> = {
   '0': 'Less than 1 year',
   '1': '1–2 years',
@@ -17,21 +19,25 @@ export default function AdminCaregivers() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'verified' | 'unverified' | 'banned'>('all')
   const [selected, setSelected] = useState<any>(null)
+  const [adminEmail, setAdminEmail] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
     const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setAdminEmail(user?.email || '')
+
       const { data } = await supabase
         .from('users')
         .select(`
           *,
           caregiver_profiles (
-            services, languages, years_experience,
+            id, services, languages, years_experience,
             hourly_rate_min, hourly_rate_max,
             bio, background_check_status, is_verified,
-            onboarding_answers, rating, review_count
-          ),
-          notifications (id, type, read, created_at)
+            onboarding_answers, rating, review_count,
+            verification_status, id_photo_path, selfie_path, verification_submitted_at
+          )
         `)
         .eq('role', 'caregiver')
         .order('created_at', { ascending: false })
@@ -49,21 +55,14 @@ export default function AdminCaregivers() {
       ban_reason: reason,
     }).eq('id', userId)
     setCaregivers(prev => prev.map(c =>
-      c.id === userId ? {
-        ...c,
-        is_banned: type === 'hard',
-        is_shadow_banned: type === 'shadow',
-        ban_reason: reason
-      } : c
+      c.id === userId ? { ...c, is_banned: type === 'hard', is_shadow_banned: type === 'shadow', ban_reason: reason } : c
     ))
     setSelected(null)
   }
 
   const unbanUser = async (userId: string) => {
     await supabase.from('users').update({
-      is_banned: false,
-      is_shadow_banned: false,
-      ban_reason: null
+      is_banned: false, is_shadow_banned: false, ban_reason: null
     }).eq('id', userId)
     setCaregivers(prev => prev.map(c =>
       c.id === userId ? { ...c, is_banned: false, is_shadow_banned: false, ban_reason: null } : c
@@ -71,17 +70,51 @@ export default function AdminCaregivers() {
     setSelected(null)
   }
 
-  const verifyCaregiver = async (userId: string, profileId: string) => {
+  const verifyCaregiver = async (userId: string) => {
     await supabase.from('caregiver_profiles')
-      .update({ is_verified: true })
+      .update({ is_verified: true, verification_status: 'approved' })
       .eq('user_id', userId)
+    // Notify the caregiver
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      type: 'verification_approved',
+      title: '✅ You\'re verified!',
+      body: 'Your identity has been confirmed. Families can now see your verified badge.',
+      data: {}
+    })
     setCaregivers(prev => prev.map(c =>
       c.id === userId ? {
         ...c,
-        caregiver_profiles: { ...c.caregiver_profiles, is_verified: true }
+        caregiver_profiles: { ...c.caregiver_profiles, is_verified: true, verification_status: 'approved' }
       } : c
     ))
+    setSelected(null)
   }
+
+  const rejectVerification = async (userId: string) => {
+    await supabase.from('caregiver_profiles')
+      .update({ verification_status: 'rejected' })
+      .eq('user_id', userId)
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      type: 'verification_rejected',
+      title: 'Verification needs another look',
+      body: 'We couldn\'t verify your documents. Please re-submit clear photos of your ID and a selfie.',
+      data: {}
+    })
+    setCaregivers(prev => prev.map(c =>
+      c.id === userId ? {
+        ...c,
+        caregiver_profiles: { ...c.caregiver_profiles, verification_status: 'rejected' }
+      } : c
+    ))
+    setSelected(null)
+  }
+
+  // Pending verification queue
+  const pendingVerifications = caregivers.filter(
+    c => c.caregiver_profiles?.verification_status === 'pending'
+  )
 
   const filtered = caregivers.filter(c => {
     const matchSearch =
@@ -108,12 +141,47 @@ export default function AdminCaregivers() {
         <p className="text-gray-400 mt-1">{caregivers.length} registered caregivers</p>
       </div>
 
+      {/* Pending Verification Queue */}
+      {pendingVerifications.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xl">🛡️</span>
+            <h2 className="font-bold text-amber-300">
+              {pendingVerifications.length} awaiting verification
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {pendingVerifications.map(c => (
+              <div key={c.id} className="flex items-center gap-3 bg-gray-900/50 rounded-xl p-3">
+                {c.avatar_url
+                  ? <img src={c.avatar_url} className="w-9 h-9 rounded-full object-cover" />
+                  : <div className="w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-300">{c.full_name?.[0] || '?'}</div>
+                }
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-white">{c.full_name}</div>
+                  <div className="text-xs text-gray-400">
+                    Submitted {c.caregiver_profiles?.verification_submitted_at
+                      ? new Date(c.caregiver_profiles.verification_submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                      : '—'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelected(c)}
+                  className="text-xs px-4 py-2 rounded-lg bg-amber-500 text-white font-medium hover:bg-amber-600 transition">
+                  Review →
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total', value: caregivers.length, icon: '🤝' },
           { label: 'Verified', value: caregivers.filter(c => c.caregiver_profiles?.is_verified).length, icon: '✅' },
-          { label: 'With Bio', value: caregivers.filter(c => c.caregiver_profiles?.bio).length, icon: '📝' },
+          { label: 'Pending', value: pendingVerifications.length, icon: '⏳' },
           { label: 'Banned', value: caregivers.filter(c => c.is_banned || c.is_shadow_banned).length, icon: '🚫' },
         ].map(stat => (
           <div key={stat.label} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
@@ -133,15 +201,10 @@ export default function AdminCaregivers() {
           className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#7FB3FF]"
         />
         {(['all', 'verified', 'unverified', 'banned'] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
+          <button key={f} onClick={() => setFilter(f)}
             className={`px-4 py-2.5 rounded-xl text-sm font-medium transition ${
-              filter === f
-                ? 'bg-[#7FB3FF] text-white'
-                : 'bg-gray-900 border border-gray-700 text-gray-400 hover:text-white'
-            }`}
-          >
+              filter === f ? 'bg-[#7FB3FF] text-white' : 'bg-gray-900 border border-gray-700 text-gray-400 hover:text-white'
+            }`}>
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
@@ -152,23 +215,20 @@ export default function AdminCaregivers() {
         <div className="divide-y divide-gray-800">
           {filtered.map(c => (
             <div key={c.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-800/50 transition">
-              {/* Avatar */}
               <div className="flex-shrink-0">
-                {c.avatar_url ? (
-                  <img src={c.avatar_url} className="w-10 h-10 rounded-full object-cover" />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-300">
-                    {c.full_name?.[0] || '?'}
-                  </div>
-                )}
+                {c.avatar_url
+                  ? <img src={c.avatar_url} className="w-10 h-10 rounded-full object-cover" />
+                  : <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-300">{c.full_name?.[0] || '?'}</div>
+                }
               </div>
-
-              {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-white text-sm">{c.full_name}</span>
                   {c.caregiver_profiles?.is_verified && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">✓ Verified</span>
+                  )}
+                  {c.caregiver_profiles?.verification_status === 'pending' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">⏳ Pending</span>
                   )}
                   {c.is_banned && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">🚫 Banned</span>
@@ -181,52 +241,28 @@ export default function AdminCaregivers() {
                 <div className="text-xs text-gray-500 mt-0.5">
                   {c.caregiver_profiles?.services?.join(', ')} ·{' '}
                   {c.caregiver_profiles?.languages?.join(', ')} ·{' '}
-                  {EXPERIENCE_LABELS[String(c.caregiver_profiles?.years_experience)]} ·{' '}
                   ${c.caregiver_profiles?.hourly_rate_min}–${c.caregiver_profiles?.hourly_rate_max}/hr
                 </div>
-                {c.caregiver_profiles?.bio && (
-                  <div className="text-xs text-gray-600 mt-0.5 truncate max-w-sm">
-                    {c.caregiver_profiles.bio}
-                  </div>
-                )}
               </div>
-
-              {/* Rating */}
-              <div className="text-center hidden md:block flex-shrink-0">
-                <div className="text-sm font-bold text-white">
-                  {c.caregiver_profiles?.rating > 0 ? `⭐ ${c.caregiver_profiles.rating}` : '—'}
-                </div>
-                <div className="text-xs text-gray-500">{c.caregiver_profiles?.review_count || 0} reviews</div>
-              </div>
-
-              {/* Actions */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={() => setSelected(c)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition"
-                >
+                <button onClick={() => setSelected(c)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition">
                   View
                 </button>
                 {!c.caregiver_profiles?.is_verified && !c.is_banned && (
-                  <button
-                    onClick={() => verifyCaregiver(c.id, c.caregiver_profiles?.id)}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition"
-                  >
+                  <button onClick={() => verifyCaregiver(c.id)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition">
                     Verify
                   </button>
                 )}
-                {c.is_banned || c.is_shadow_banned ? (
-                  <button
-                    onClick={() => unbanUser(c.id)}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
-                  >
+                {(c.is_banned || c.is_shadow_banned) ? (
+                  <button onClick={() => unbanUser(c.id)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition">
                     Unban
                   </button>
                 ) : (
-                  <button
-                    onClick={() => setSelected(c)}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
-                  >
+                  <button onClick={() => setSelected(c)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition">
                     Ban
                   </button>
                 )}
@@ -236,45 +272,71 @@ export default function AdminCaregivers() {
         </div>
       </div>
 
-      {/* Detail Modal */}
       {selected && (
         <CaregiverModal
           caregiver={selected}
+          adminEmail={adminEmail}
           onClose={() => setSelected(null)}
           onBan={banUser}
           onUnban={unbanUser}
           onVerify={verifyCaregiver}
+          onReject={rejectVerification}
         />
       )}
     </div>
   )
 }
 
-function CaregiverModal({ caregiver, onClose, onBan, onUnban, onVerify }: {
+function CaregiverModal({ caregiver, adminEmail, onClose, onBan, onUnban, onVerify, onReject }: {
   caregiver: any
+  adminEmail: string
   onClose: () => void
   onBan: (id: string, type: 'hard' | 'shadow', reason: string) => void
   onUnban: (id: string) => void
-  onVerify: (userId: string, profileId: string) => void
+  onVerify: (userId: string) => void
+  onReject: (userId: string) => void
 }) {
   const [banReason, setBanReason] = useState('')
   const [banType, setBanType] = useState<'shadow' | 'hard'>('shadow')
+  const [photos, setPhotos] = useState<{ idUrl: string | null; selfieUrl: string | null } | null>(null)
+  const [loadingPhotos, setLoadingPhotos] = useState(false)
   const profile = caregiver.caregiver_profiles
   const answers = profile?.onboarding_answers || {}
+  const hasVerificationDocs = profile?.id_photo_path || profile?.selfie_path
+
+  useEffect(() => {
+    const loadPhotos = async () => {
+      if (!hasVerificationDocs) return
+      setLoadingPhotos(true)
+      try {
+        const res = await fetch('/api/admin/verification-photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idPath: profile.id_photo_path,
+            selfiePath: profile.selfie_path,
+            requesterEmail: adminEmail,
+          })
+        })
+        const data = await res.json()
+        setPhotos(data)
+      } catch (err) {
+        console.error('Failed to load photos', err)
+      }
+      setLoadingPhotos(false)
+    }
+    loadPhotos()
+  }, [])
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
       <div className="bg-gray-900 rounded-2xl border border-gray-700 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            {caregiver.avatar_url ? (
-              <img src={caregiver.avatar_url} className="w-14 h-14 rounded-full object-cover" />
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold text-gray-300">
-                {caregiver.full_name?.[0] || '?'}
-              </div>
-            )}
+            {caregiver.avatar_url
+              ? <img src={caregiver.avatar_url} className="w-14 h-14 rounded-full object-cover" />
+              : <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold text-gray-300">{caregiver.full_name?.[0] || '?'}</div>
+            }
             <div>
               <div className="font-bold text-white flex items-center gap-2">
                 {caregiver.full_name}
@@ -283,11 +345,64 @@ function CaregiverModal({ caregiver, onClose, onBan, onUnban, onVerify }: {
                 )}
               </div>
               <div className="text-sm text-gray-400">{caregiver.email}</div>
-              <div className="text-xs text-gray-500">{caregiver.id}</div>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">×</button>
         </div>
+
+        {/* Verification Documents */}
+        {hasVerificationDocs && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">🛡️</span>
+              <span className="text-sm font-semibold text-amber-300">Verification Documents</span>
+              {profile?.verification_status === 'pending' && (
+                <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full ml-auto">Pending review</span>
+              )}
+            </div>
+
+            {loadingPhotos ? (
+              <div className="text-center py-8 text-gray-400 text-sm">Loading documents...</div>
+            ) : photos ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">ID Document</div>
+                  {photos.idUrl
+                    ? <a href={photos.idUrl} target="_blank" rel="noopener noreferrer">
+                        <img src={photos.idUrl} className="w-full h-32 object-cover rounded-lg border border-gray-700 hover:border-amber-500 transition" />
+                      </a>
+                    : <div className="w-full h-32 rounded-lg bg-gray-800 flex items-center justify-center text-xs text-gray-500">No ID uploaded</div>
+                  }
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">Selfie</div>
+                  {photos.selfieUrl
+                    ? <a href={photos.selfieUrl} target="_blank" rel="noopener noreferrer">
+                        <img src={photos.selfieUrl} className="w-full h-32 object-cover rounded-lg border border-gray-700 hover:border-amber-500 transition" />
+                      </a>
+                    : <div className="w-full h-32 rounded-lg bg-gray-800 flex items-center justify-center text-xs text-gray-500">No selfie uploaded</div>
+                  }
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-gray-500 text-sm">Could not load documents</div>
+            )}
+
+            {/* Approve / Reject for pending */}
+            {profile?.verification_status === 'pending' && !profile?.is_verified && (
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => onReject(caregiver.id)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition">
+                  ✕ Reject
+                </button>
+                <button onClick={() => onVerify(caregiver.id)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition">
+                  ✓ Approve & Verify
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Details */}
         <div className="space-y-3 mb-4">
@@ -296,23 +411,18 @@ function CaregiverModal({ caregiver, onClose, onBan, onUnban, onVerify }: {
             { label: 'Languages', value: profile?.languages?.join(', ') },
             { label: 'Experience', value: EXPERIENCE_LABELS[String(profile?.years_experience)] },
             { label: 'Rate', value: `$${profile?.hourly_rate_min}–$${profile?.hourly_rate_max}/hr` },
-            { label: 'Availability', value: answers.availability },
-            { label: 'Live-in', value: answers.living },
-            { label: 'Background Check', value: profile?.background_check_status || 'Not started' },
           ].map(item => (
             <div key={item.label} className="bg-gray-800 rounded-xl p-3">
               <div className="text-xs text-gray-400 mb-1">{item.label}</div>
               <div className="text-sm text-white">{item.value || '—'}</div>
             </div>
           ))}
-
           {profile?.bio && (
             <div className="bg-gray-800 rounded-xl p-3">
               <div className="text-xs text-gray-400 mb-1">Bio</div>
               <div className="text-sm text-white leading-relaxed">{profile.bio}</div>
             </div>
           )}
-
           {caregiver.is_banned && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
               <div className="text-xs text-red-400 mb-1">🚫 Hard Banned</div>
@@ -327,13 +437,11 @@ function CaregiverModal({ caregiver, onClose, onBan, onUnban, onVerify }: {
           )}
         </div>
 
-        {/* Verify button */}
-        {!profile?.is_verified && !caregiver.is_banned && !caregiver.is_shadow_banned && (
-          <button
-            onClick={() => { onVerify(caregiver.id, profile?.id); onClose() }}
-            className="w-full py-2.5 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition mb-3"
-          >
-            ✅ Verify This Caregiver
+        {/* Manual verify (when no docs uploaded) */}
+        {!profile?.is_verified && !hasVerificationDocs && !caregiver.is_banned && !caregiver.is_shadow_banned && (
+          <button onClick={() => onVerify(caregiver.id)}
+            className="w-full py-2.5 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition mb-3">
+            ✅ Manually Verify This Caregiver
           </button>
         )}
 
@@ -341,66 +449,45 @@ function CaregiverModal({ caregiver, onClose, onBan, onUnban, onVerify }: {
         {!caregiver.is_banned && !caregiver.is_shadow_banned ? (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setBanType('shadow')}
+              <button onClick={() => setBanType('shadow')}
                 className={`py-2.5 rounded-xl text-xs font-medium border transition ${
-                  banType === 'shadow'
-                    ? 'border-yellow-500 bg-yellow-500/20 text-yellow-400'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }`}
-              >
+                  banType === 'shadow' ? 'border-yellow-500 bg-yellow-500/20 text-yellow-400' : 'border-gray-700 text-gray-400 hover:text-white'
+                }`}>
                 👻 Shadow Ban
                 <div className="text-xs font-normal opacity-70 mt-0.5">Hidden from families</div>
               </button>
-              <button
-                onClick={() => setBanType('hard')}
+              <button onClick={() => setBanType('hard')}
                 className={`py-2.5 rounded-xl text-xs font-medium border transition ${
-                  banType === 'hard'
-                    ? 'border-red-500 bg-red-500/20 text-red-400'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }`}
-              >
+                  banType === 'hard' ? 'border-red-500 bg-red-500/20 text-red-400' : 'border-gray-700 text-gray-400 hover:text-white'
+                }`}>
                 🚫 Hard Ban
                 <div className="text-xs font-normal opacity-70 mt-0.5">Blocked from platform</div>
               </button>
             </div>
-            <textarea
-              value={banReason}
-              onChange={e => setBanReason(e.target.value)}
-              placeholder="Reason for ban (internal only)..."
-              rows={2}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none"
-            />
+            <textarea value={banReason} onChange={e => setBanReason(e.target.value)}
+              placeholder="Reason for ban (internal only)..." rows={2}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none" />
             <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 py-2.5 rounded-xl text-sm border border-gray-700 text-gray-400 hover:text-white transition"
-              >
+              <button onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl text-sm border border-gray-700 text-gray-400 hover:text-white transition">
                 Cancel
               </button>
-              <button
-                onClick={() => onBan(caregiver.id, banType, banReason)}
-                disabled={!banReason.trim()}
+              <button onClick={() => onBan(caregiver.id, banType, banReason)} disabled={!banReason.trim()}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 transition ${
                   banType === 'hard' ? 'bg-red-500 hover:bg-red-600' : 'bg-yellow-600 hover:bg-yellow-700'
-                }`}
-              >
+                }`}>
                 {banType === 'hard' ? '🚫 Hard Ban' : '👻 Shadow Ban'}
               </button>
             </div>
           </div>
         ) : (
           <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-sm border border-gray-700 text-gray-400 hover:text-white transition"
-            >
+            <button onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl text-sm border border-gray-700 text-gray-400 hover:text-white transition">
               Close
             </button>
-            <button
-              onClick={() => onUnban(caregiver.id)}
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition"
-            >
+            <button onClick={() => onUnban(caregiver.id)}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition">
               ✅ Remove Ban
             </button>
           </div>
