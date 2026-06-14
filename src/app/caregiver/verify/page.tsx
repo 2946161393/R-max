@@ -246,7 +246,8 @@ export default function CaregiverVerifyPage() {
         {/* Privacy note */}
         <div className="bg-gray-50 rounded-xl p-4 mb-6">
           <p className="text-xs text-gray-500 leading-relaxed">
-            🔒 Your photos are stored securely and are only visible to the Ruah team for verification. We never share them with families or third parties. Review takes up to 24 hours.
+            🔒 Your photos are stored securely and are only visible to the Ruah team for verification. We never share them with families or third parties. Review takes up to 24 hours.{' '}
+            <a href="/privacy" target="_blank" className="text-[#7FB3FF] underline">Privacy Policy</a>
           </p>
         </div>
 
