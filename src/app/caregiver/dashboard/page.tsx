@@ -34,28 +34,18 @@ export default function CaregiverDashboard() {
       if (caregiverData?.id) {
         const { data: rawApps } = await supabase
           .from('applications')
-          .select(`
-            *,
-            service_requests (
-              id, service_type, status, ai_job_post, created_at,
-              family_profiles ( user_id )
-            )
-          `)
+          .select(`*, service_requests(id, service_type, status, ai_job_post, created_at, family_profiles(user_id))`)
           .eq('caregiver_id', caregiverData.id)
           .order('created_at', { ascending: false })
 
         const familyUserIds = [...new Set(
-          (rawApps || [])
-            .map((a: any) => a.service_requests?.family_profiles?.user_id)
-            .filter(Boolean)
+          (rawApps || []).map((a: any) => a.service_requests?.family_profiles?.user_id).filter(Boolean)
         )]
 
         let familyUsersMap: Record<string, any> = {}
         if (familyUserIds.length > 0) {
           const { data: familyUsersData } = await supabase
-            .from('users')
-            .select('id, full_name, avatar_url')
-            .in('id', familyUserIds)
+            .from('users').select('id, full_name, avatar_url').in('id', familyUserIds)
           familyUsersData?.forEach((u: any) => { familyUsersMap[u.id] = u })
         }
 
@@ -65,7 +55,6 @@ export default function CaregiverDashboard() {
         }))
       }
 
-      // Update last_active_at
       if (caregiverData?.id) {
         await supabase.from('caregiver_profiles')
           .update({ last_active_at: new Date().toISOString() })
@@ -91,16 +80,11 @@ export default function CaregiverDashboard() {
 
   const handleMatchInterest = async (n: any, interested: boolean) => {
     if (!n.data?.matchId) return
-
     await supabase.from('matches')
-      .update({
-        caregiver_interested: interested,
-        ...(interested ? {} : { status: 'declined' })
-      })
+      .update({ caregiver_interested: interested, ...(interested ? {} : { status: 'declined' }) })
       .eq('id', n.data.matchId)
 
     if (interested) {
-      // Check if family already interested → mutual!
       const { data: matchData } = await supabase
         .from('matches')
         .select('*, service_requests(family_profiles(user_id))')
@@ -132,19 +116,13 @@ export default function CaregiverDashboard() {
           return
         }
       }
-
-      // Family hasn't responded yet — update no_response_count if pass
     } else {
-      // Passed — increment no_response_count
       await supabase.from('caregiver_profiles')
         .update({ match_no_response_count: (profile?.match_no_response_count || 0) + 1 })
         .eq('user_id', user.id)
     }
-
     await markAsRead(n.id)
-    setNotifications(prev => prev.map(notif =>
-      notif.id === n.id ? { ...notif, read: true } : notif
-    ))
+    setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, read: true } : notif))
   }
 
   const handleSignOut = async () => {
@@ -158,16 +136,20 @@ export default function CaregiverDashboard() {
     </div>
   )
 
+  const unreadCount = notifications.filter(n => !n.read).length
+  const previewNotifs = notifications.slice(0, 3)
+  const previewApps = applications.slice(0, 2)
+  const acceptedApps = applications.filter(a => a.status === 'accepted')
+  const pendingApps = applications.filter(a => a.status === 'pending')
+
+  const isVerified = profile?.is_verified
   const completionItems = [
     { label: 'Basic info added', done: true },
     { label: 'Bio written', done: !!profile?.bio },
     { label: 'Location set', done: !!user?.zipcode },
-    { label: 'Background check', done: profile?.background_check_status === 'passed' },
+    { label: 'Identity verified', done: isVerified },
   ]
   const completionPct = Math.round((completionItems.filter(i => i.done).length / completionItems.length) * 100)
-  const unreadCount = notifications.filter(n => !n.read).length
-  const pendingApps = applications.filter(a => a.status === 'pending')
-  const acceptedApps = applications.filter(a => a.status === 'accepted')
 
   return (
     <div className="min-h-screen bg-[#FAFCFF]">
@@ -184,180 +166,215 @@ export default function CaregiverDashboard() {
             className="text-sm text-gray-600 hover:text-[#7FB3FF] transition">
             👋 {user?.full_name}
           </button>
-          <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
+          <button onClick={() => router.push('/messages')}
+            className="text-sm text-gray-400 hover:text-gray-600">💬 Messages</button>
+          <button onClick={handleSignOut}
+            className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Welcome, {user?.full_name?.split(' ')[0]}! 🤝</h1>
-          <p className="text-gray-400 mt-1">Manage your profile and find families to help</p>
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Welcome, {user?.full_name?.split(' ')[0]}! 🤝
+          </h1>
+          <p className="text-gray-400 mt-1">Find families looking for care</p>
         </div>
 
-        {/* Unread notifications */}
-        {notifications.filter(n => !n.read).length > 0 && (
-          <div className="mb-6 space-y-3">
-            {notifications.filter(n => !n.read).map(n => (
-              <div key={n.id} onClick={() => markAsRead(n.id)}
-                className="bg-white rounded-2xl border border-[#7FB3FF]/30 bg-blue-50/30 p-4 cursor-pointer transition">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl mt-0.5">
-                      {n.type === 'new_match' ? '🎯'
-                        : n.type === 'mutual_match' ? '🎉'
-                        : n.type === 'application_accepted' ? '✅'
-                        : n.type === 'message' ? '💬'
-                        : '📬'}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">{n.title}</div>
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">{n.body}</p>
-                      <div className="text-xs text-gray-300 mt-2">
-                        {new Date(n.created_at).toLocaleDateString('en-US', {
-                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1" />
-                </div>
-
-                {/* New match — I'm Interested / Pass */}
-                {n.type === 'new_match' && n.data?.matchId && (
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={e => { e.stopPropagation(); handleMatchInterest(n, true) }}
-                      className="flex-1 text-white py-2 rounded-xl text-xs font-semibold"
-                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
-                      ✅ I'm Interested!
-                    </button>
-                    {n.data?.familyUserId && (
-                      <button onClick={e => { e.stopPropagation(); router.push(`/caregiver/requests`) }}
-                        className="flex-1 py-2 rounded-xl text-xs font-medium border border-gray-200 text-gray-600 hover:border-[#7FB3FF] transition">
-                        📋 View Their Post
-                      </button>
-                    )}
-                    <button onClick={e => { e.stopPropagation(); handleMatchInterest(n, false) }}
-                      className="px-4 py-2 rounded-xl text-xs font-medium border border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-400 transition">
-                      Pass
-                    </button>
-                  </div>
-                )}
-
-                {/* Mutual match */}
-                {n.type === 'mutual_match' && n.data?.familyUserId && (
-                  <div className="mt-3">
-                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/messages/${n.data.familyUserId}`) }}
-                      className="w-full text-white py-2 rounded-xl text-xs font-semibold"
-                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
-                      💬 Start Chatting
-                    </button>
-                  </div>
-                )}
-
-                {/* Application accepted */}
-                {n.type === 'application_accepted' && n.data?.familyUserId && (
-                  <div className="mt-3">
-                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/messages/${n.data.familyUserId}`) }}
-                      className="w-full text-white py-2 rounded-xl text-xs font-semibold"
-                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
-                      💬 Message Family
-                    </button>
-                  </div>
-                )}
-
-                {/* Message */}
-                {n.type === 'message' && n.data?.senderId && (
-                  <div className="mt-3">
-                    <button onClick={e => { e.stopPropagation(); markAsRead(n.id); router.push(`/messages/${n.data.senderId}`) }}
-                      className="w-full text-white py-2 rounded-xl text-xs font-semibold"
-                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
-                      💬 Reply
-                    </button>
-                  </div>
-                )}
+        {applications.length > 0 ? (
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            {[
+              { label: 'Applied', value: applications.length, icon: '📩' },
+              { label: 'Accepted', value: acceptedApps.length, icon: '✅' },
+              { label: 'Pending', value: pendingApps.length, icon: '⏳' },
+            ].map(stat => (
+              <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+                <div className="text-2xl mb-1">{stat.icon}</div>
+                <div className="text-xl font-bold text-gray-900">{stat.value}</div>
+                <div className="text-xs text-gray-400">{stat.label}</div>
               </div>
             ))}
           </div>
+        ) : (
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-[#7FB3FF]/30 rounded-2xl p-5 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">✨</div>
+              <div>
+                <div className="font-semibold text-gray-900 text-sm">Ready to find your first family?</div>
+                <div className="text-xs text-gray-500 mt-1">Complete your profile and browse open requests to get started.</div>
+                <button
+                  onClick={() => router.push('/caregiver/requests')}
+                  className="mt-3 text-white px-4 py-2 rounded-xl text-xs font-semibold"
+                  style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                  Browse requests →
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <button onClick={() => router.push('/caregiver/requests')}
-            className="p-5 rounded-2xl text-left transition"
-            style={{
-              background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)',
-              boxShadow: '0 8px 32px rgba(127, 179, 255, 0.3)'
-            }}>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <button
+            onClick={() => router.push('/caregiver/requests')}
+            className="p-6 rounded-2xl text-left transition"
+            style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)', boxShadow: '0 8px 32px rgba(127, 179, 255, 0.3)' }}>
             <div className="text-2xl mb-2">📋</div>
-            <div className="font-semibold text-white text-sm">Browse Requests</div>
-            <div className="text-xs text-white/70 mt-1">Find families</div>
+            <div className="font-semibold text-white">Browse Requests</div>
+            <div className="text-sm text-white/70 mt-1">Find families to help</div>
           </button>
-          <button onClick={() => router.push('/caregiver/profile')}
-            className="bg-white border border-gray-200 p-5 rounded-2xl text-left hover:border-[#7FB3FF] transition">
+          <button
+            onClick={() => router.push('/caregiver/profile')}
+            className="bg-white border border-gray-200 p-6 rounded-2xl text-left hover:border-[#7FB3FF] transition">
             <div className="text-2xl mb-2">👤</div>
-            <div className="font-semibold text-gray-900 text-sm">My Profile</div>
-            <div className="text-xs text-gray-400 mt-1">Edit info & services</div>
-          </button>
-          <button onClick={() => router.push('/messages')}
-            className="bg-white border border-gray-200 p-5 rounded-2xl text-left hover:border-[#7FB3FF] transition">
-            <div className="text-2xl mb-2">💬</div>
-            <div className="font-semibold text-gray-900 text-sm">Messages</div>
-            <div className="text-xs text-gray-400 mt-1">Chat with families</div>
+            <div className="font-semibold text-gray-900">My Profile</div>
+            <div className="text-sm text-gray-400 mt-1">Edit info & services</div>
           </button>
         </div>
 
-        {/* My Applications */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-gray-900">My Applications</h2>
-              {pendingApps.length > 0 && (
-                <span className="bg-[#7FB3FF] text-white text-xs px-2 py-0.5 rounded-full">
-                  {pendingApps.length} pending
-                </span>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900">Profile completion</h2>
+            <span className="text-sm font-medium text-[#7FB3FF]">{completionPct}%</span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
+            <div className="h-2 rounded-full transition-all"
+              style={{ width: `${completionPct}%`, background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }} />
+          </div>
+          <div className="space-y-2 mb-4">
+            {completionItems.map(item => (
+              <div key={item.label} className="flex items-center gap-2 text-sm">
+                {item.done
+                  ? <span className="text-green-500">✓</span>
+                  : <span className="text-gray-300">○</span>}
+                <span className={item.done ? 'text-gray-600' : 'text-gray-400'}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+          {!isVerified && (
+            <div
+              onClick={() => router.push('/caregiver/verify')}
+              className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3 cursor-pointer hover:bg-amber-100 transition">
+              <span className="text-xl">🛡️</span>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-amber-800">Complete identity verification</div>
+                <div className="text-xs text-amber-600 mt-0.5">Verified caregivers get 3x more matches</div>
+              </div>
+              <span className="text-amber-400 text-sm">→</span>
+            </div>
+          )}
+          {completionPct < 100 && (
+            <button
+              onClick={() => router.push('/caregiver/profile')}
+              className="w-full mt-3 py-2.5 rounded-xl text-sm font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition">
+              Complete Profile →
+            </button>
+          )}
+        </div>
+
+        {previewNotifs.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">Recent activity</h2>
+              {notifications.length > 3 && (
+                <button
+                  onClick={() => router.push('/caregiver/activity')}
+                  className="text-sm text-[#7FB3FF] hover:underline">
+                  See all →
+                </button>
               )}
             </div>
-            <span className="text-xs text-gray-400">{applications.length} total</span>
-          </div>
+            <div className="space-y-3">
+              {previewNotifs.map(n => (
+                <div key={n.id} className={`rounded-xl p-3 ${!n.read ? 'bg-blue-50/40' : ''}`}>
+                  <div className="flex items-start gap-3">
+                    <div className="text-xl mt-0.5">
+                      {n.type === 'new_match' ? '🎯'
+                        : n.type === 'mutual_match' ? '🎉'
+                        : n.type === 'application_accepted' ? '✅'
+                        : n.type === 'message' ? '💬' : '📬'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900">{n.title}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{n.body}</div>
+                      <div className="text-xs text-gray-300 mt-1">
+                        {new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    {!n.read && <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1.5" />}
+                  </div>
 
-          {applications.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <div className="text-3xl mb-2">📩</div>
-              <p className="text-sm">No applications yet.</p>
-              <button onClick={() => router.push('/caregiver/requests')}
-                className="mt-2 text-xs text-[#7FB3FF] hover:underline">
-                Browse open requests →
+                  {n.type === 'new_match' && n.data?.matchId && (
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={() => handleMatchInterest(n, true)}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white"
+                        style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                        ✅ Interested
+                      </button>
+                      <button onClick={() => router.push('/caregiver/requests')}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600">
+                        View post
+                      </button>
+                      <button onClick={() => handleMatchInterest(n, false)}
+                        className="px-3 py-1.5 rounded-lg text-xs border border-gray-100 text-gray-400 hover:border-red-200 hover:text-red-400">
+                        Pass
+                      </button>
+                    </div>
+                  )}
+                  {n.type === 'mutual_match' && n.data?.familyUserId && (
+                    <button onClick={() => { markAsRead(n.id); router.push(`/messages/${n.data.familyUserId}`) }}
+                      className="w-full mt-2 py-1.5 rounded-lg text-xs font-semibold text-white"
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                      💬 Start Chatting
+                    </button>
+                  )}
+                  {n.type === 'message' && n.data?.senderId && (
+                    <button onClick={() => { markAsRead(n.id); router.push(`/messages/${n.data.senderId}`) }}
+                      className="w-full mt-2 py-1.5 rounded-lg text-xs font-semibold text-white"
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                      💬 Reply
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {applications.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">My applications</h2>
+              <button
+                onClick={() => router.push('/caregiver/applications')}
+                className="text-sm text-[#7FB3FF] hover:underline">
+                See all {applications.length} →
               </button>
             </div>
-          ) : (
             <div className="space-y-3">
-              {applications.map(app => {
+              {previewApps.map(app => {
                 const req = app.service_requests
                 const familyUser = app.familyUser
                 const familyUserId = req?.family_profiles?.user_id
-
                 const nameParts = (familyUser?.full_name || '').split(' ').filter(Boolean)
                 const displayName = nameParts.length > 1
                   ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}.`
                   : nameParts[0] || 'A Family'
 
                 return (
-                  <div key={app.id} className={`rounded-xl border p-3 transition ${
+                  <div key={app.id} className={`rounded-xl border p-3 ${
                     app.status === 'accepted' ? 'border-green-200 bg-green-50/20'
-                    : app.status === 'declined' ? 'border-red-100 bg-red-50/10 opacity-60'
+                    : app.status === 'declined' ? 'border-red-100 opacity-60'
                     : 'border-gray-100'
                   }`}>
                     <div className="flex items-center gap-3">
-                      {familyUser?.avatar_url ? (
-                        <img src={familyUser.avatar_url}
-                          className="w-9 h-9 rounded-full object-cover flex-shrink-0" alt="" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                          {nameParts[0]?.[0]?.toUpperCase() || '?'}
-                        </div>
-                      )}
+                      {familyUser?.avatar_url
+                        ? <img src={familyUser.avatar_url} className="w-9 h-9 rounded-full object-cover flex-shrink-0" alt="" />
+                        : <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                            {nameParts[0]?.[0]?.toUpperCase() || '?'}
+                          </div>
+                      }
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900">{displayName}</span>
                           <span className="text-xs text-gray-400 capitalize">{req?.service_type}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -374,7 +391,7 @@ export default function CaregiverDashboard() {
                         <button onClick={() => router.push(`/messages/${familyUserId}`)}
                           className="text-xs px-3 py-1.5 rounded-lg text-white flex-shrink-0"
                           style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
-                          💬 Message
+                          💬
                         </button>
                       )}
                     </div>
@@ -382,47 +399,8 @@ export default function CaregiverDashboard() {
                 )
               })}
             </div>
-          )}
-        </div>
-
-        {/* Profile Completion */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900">Profile Completion</h2>
-            <span className="text-sm font-medium text-[#7FB3FF]">{completionPct}%</span>
           </div>
-          <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
-            <div className="h-2 rounded-full transition-all"
-              style={{ width: `${completionPct}%`, background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }} />
-          </div>
-          <div className="space-y-2 mb-4">
-            {completionItems.map(item => (
-              <div key={item.label} className="flex items-center gap-2 text-sm">
-                {item.done ? <span className="text-green-500">✓</span> : <span className="text-gray-300">○</span>}
-                <span className={item.done ? 'text-gray-600' : 'text-gray-400'}>{item.label}</span>
-              </div>
-            ))}
-          </div>
-          <button onClick={() => router.push('/caregiver/profile')}
-            className="w-full py-3 rounded-xl text-sm font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition">
-            Complete Profile →
-          </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          {[
-            { label: 'Applied', value: String(applications.length), icon: '📩' },
-            { label: 'Accepted', value: String(acceptedApps.length), icon: '✅' },
-            { label: 'Pending', value: String(pendingApps.length), icon: '⏳' },
-          ].map(stat => (
-            <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
-              <div className="text-2xl mb-1">{stat.icon}</div>
-              <div className="text-xl font-bold text-gray-900">{stat.value}</div>
-              <div className="text-xs text-gray-400">{stat.label}</div>
-            </div>
-          ))}
-        </div>
+        )}
       </div>
 
       {/* Floating Ruah AI button */}
