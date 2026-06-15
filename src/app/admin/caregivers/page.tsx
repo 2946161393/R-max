@@ -71,17 +71,15 @@ export default function AdminCaregivers() {
   }
 
   const verifyCaregiver = async (userId: string) => {
-    await supabase.from('caregiver_profiles')
-      .update({ is_verified: true, verification_status: 'approved' })
-      .eq('user_id', userId)
-    // Notify the caregiver
-    await supabase.from('notifications').insert({
-      user_id: userId,
-      type: 'verification_approved',
-      title: '✅ You\'re verified!',
-      body: 'Your identity has been confirmed. Families can now see your verified badge.',
-      data: {}
+    const res = await fetch('/api/admin/verify-caregiver', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action: 'approve', requesterEmail: adminEmail }),
     })
+    if (!res.ok) {
+      alert('Failed to verify. Please try again.')
+      return
+    }
     setCaregivers(prev => prev.map(c =>
       c.id === userId ? {
         ...c,
@@ -92,16 +90,15 @@ export default function AdminCaregivers() {
   }
 
   const rejectVerification = async (userId: string) => {
-    await supabase.from('caregiver_profiles')
-      .update({ verification_status: 'rejected' })
-      .eq('user_id', userId)
-    await supabase.from('notifications').insert({
-      user_id: userId,
-      type: 'verification_rejected',
-      title: 'Verification needs another look',
-      body: 'We couldn\'t verify your documents. Please re-submit clear photos of your ID and a selfie.',
-      data: {}
+    const res = await fetch('/api/admin/verify-caregiver', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action: 'reject', requesterEmail: adminEmail }),
     })
+    if (!res.ok) {
+      alert('Failed to reject. Please try again.')
+      return
+    }
     setCaregivers(prev => prev.map(c =>
       c.id === userId ? {
         ...c,
