@@ -4,10 +4,51 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
+// Convert array of objects to CSV and trigger browser download
+function downloadCSV(rows: Record<string, any>[], filename: string) {
+  if (rows.length === 0) {
+    alert('No data to export')
+    return
+  }
+  const headers = Object.keys(rows[0])
+  const escapeCell = (val: any) => {
+    if (val == null) return ''
+    const str = Array.isArray(val) ? val.join('; ') : String(val)
+    if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`
+    return str
+  }
+  const csv = [
+    headers.join(','),
+    ...rows.map(row => headers.map(h => escapeCell(row[h])).join(',')),
+  ].join('\n')
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+const DATE_RANGES = [
+  { label: 'All time', days: null },
+  { label: '7d', days: 7 },
+  { label: '30d', days: 30 },
+  { label: '90d', days: 90 },
+]
+
+type SortKey = 'newest' | 'oldest' | 'name'
+
 export default function AdminFamilies() {
   const [families, setFamilies] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [dateRange, setDateRange] = useState<number | null>(null)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('newest')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<any>(null)
   const router = useRouter()
   const supabase = createClient()
@@ -64,10 +105,88 @@ export default function AdminFamilies() {
     setSelected(null)
   }
 
-  const filtered = families.filter(f =>
-    f.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    f.email?.toLowerCase().includes(search.toLowerCase())
-  )
+  const hasCustomRange = customFrom || customTo
+
+  // Apply filters: search + date (custom range takes priority over quick buttons)
+  let filtered = families.filter(f => {
+    const matchSearch =
+      f.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      f.email?.toLowerCase().includes(search.toLowerCase())
+
+    let matchDate = true
+    if (hasCustomRange && f.created_at) {
+      const created = new Date(f.created_at).getTime()
+      if (customFrom) {
+        matchDate = matchDate && created >= new Date(customFrom).getTime()
+      }
+      if (customTo) {
+        // include the whole "to" day by adding 24h
+        matchDate = matchDate && created < new Date(customTo).getTime() + 24 * 60 * 60 * 1000
+      }
+    } else if (dateRange != null && f.created_at) {
+      const cutoff = Date.now() - dateRange * 24 * 60 * 60 * 1000
+      matchDate = new Date(f.created_at).getTime() >= cutoff
+    }
+    return matchSearch && matchDate
+  })
+
+  // Apply sort
+  filtered = [...filtered].sort((a, b) => {
+    if (sortKey === 'name') return (a.full_name || '').localeCompare(b.full_name || '')
+    const at = new Date(a.created_at || 0).getTime()
+    const bt = new Date(b.created_at || 0).getTime()
+    return sortKey === 'oldest' ? at - bt : bt - at
+  })
+
+  const answers = (f: any) => f.family_profiles?.onboarding_answers || {}
+
+  const exportFamiliesCSV = () => {
+    const rows = filtered.map(f => {
+      const a = answers(f)
+      return {
+        name: f.full_name,
+        email: f.email,
+        services_needed: a.services,
+        schedule: a.childcare_schedule || a.house_frequency || '',
+        budget: a.childcare_budget || a.chef_budget || a.house_budget || a.elder_budget || a.tutor_budget || '',
+        notifications: f.notifications?.length || 0,
+        banned: f.is_banned ? 'yes' : 'no',
+        shadow_banned: f.is_shadow_banned ? 'yes' : 'no',
+        signed_up: f.created_at ? new Date(f.created_at).toLocaleDateString('en-US') : '',
+      }
+    })
+    downloadCSV(rows, `ruah-families-${new Date().toISOString().slice(0, 10)}.csv`)
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(f => f.id)))
+    }
+  }
+
+  const copySelectedEmails = async () => {
+    const emails = filtered
+      .filter(f => selectedIds.has(f.id))
+      .map(f => f.email)
+      .filter(Boolean)
+    if (emails.length === 0) return
+    try {
+      await navigator.clipboard.writeText(emails.join(', '))
+      alert(`Copied ${emails.length} email${emails.length > 1 ? 's' : ''} to clipboard`)
+    } catch {
+      alert('Could not copy. Your browser may block clipboard access.')
+    }
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -75,7 +194,7 @@ export default function AdminFamilies() {
     </div>
   )
 
-  const answers = (f: any) => f.family_profiles?.onboarding_answers || {}
+  const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
 
   return (
     <div>
@@ -84,6 +203,11 @@ export default function AdminFamilies() {
           <h1 className="text-2xl font-bold text-white">Families</h1>
           <p className="text-gray-400 mt-1">{families.length} registered families</p>
         </div>
+        <button
+          onClick={exportFamiliesCSV}
+          className="px-4 py-2.5 rounded-xl text-sm font-medium bg-gray-900 border border-gray-700 text-gray-400 hover:text-white hover:border-[#7FB3FF] transition whitespace-nowrap">
+          ⬇ Export CSV
+        </button>
       </div>
 
       {/* Stats */}
@@ -106,14 +230,79 @@ export default function AdminFamilies() {
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder="Search by name or email..."
-        className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#7FB3FF] mb-4"
+        className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#7FB3FF] mb-3"
       />
+
+      {/* Date range + sort */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <span className="text-xs text-gray-500">Joined:</span>
+        {DATE_RANGES.map(r => (
+          <button key={r.label}
+            onClick={() => { setDateRange(r.days); setCustomFrom(''); setCustomTo('') }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+              !hasCustomRange && dateRange === r.days ? 'bg-[#7FB3FF] text-white' : 'bg-gray-900 border border-gray-700 text-gray-400 hover:text-white'
+            }`}>
+            {r.label}
+          </button>
+        ))}
+
+        {/* Custom date range */}
+        <div className={`flex items-center gap-2 px-2 py-1 rounded-lg border ${
+          hasCustomRange ? 'border-[#7FB3FF]' : 'border-gray-700'
+        }`}>
+          <input type="date" value={customFrom}
+            onChange={e => { setCustomFrom(e.target.value); setDateRange(null) }}
+            className="bg-gray-900 text-xs text-gray-300 focus:outline-none [color-scheme:dark]" />
+          <span className="text-xs text-gray-500">to</span>
+          <input type="date" value={customTo}
+            onChange={e => { setCustomTo(e.target.value); setDateRange(null) }}
+            className="bg-gray-900 text-xs text-gray-300 focus:outline-none [color-scheme:dark]" />
+          {hasCustomRange && (
+            <button onClick={() => { setCustomFrom(''); setCustomTo('') }}
+              className="text-xs text-gray-500 hover:text-white ml-1">✕</button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-xs text-gray-500">Sort:</span>
+          <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}
+            className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-[#7FB3FF]">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 bg-[#7FB3FF]/10 border border-[#7FB3FF]/30 rounded-xl px-4 py-2.5 mb-4">
+          <span className="text-sm text-[#7FB3FF] font-medium">{selectedIds.size} selected</span>
+          <button onClick={copySelectedEmails}
+            className="text-xs px-3 py-1.5 rounded-lg bg-[#7FB3FF] text-white font-medium hover:bg-[#6BA3F5] transition">
+            📋 Copy emails
+          </button>
+          <button onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-gray-400 hover:text-white ml-auto">Clear</button>
+        </div>
+      )}
+
+      {/* Select all */}
+      <div className="flex items-center gap-3 mb-2 px-1">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={allSelected} onChange={toggleSelectAll}
+            className="w-4 h-4 rounded accent-[#7FB3FF]" />
+          <span className="text-xs text-gray-500">Select all ({filtered.length})</span>
+        </label>
+      </div>
 
       {/* Table */}
       <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
         <div className="divide-y divide-gray-800">
           {filtered.map(f => (
             <div key={f.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-800/50 transition">
+              <input type="checkbox" checked={selectedIds.has(f.id)} onChange={() => toggleSelect(f.id)}
+                className="w-4 h-4 rounded accent-[#7FB3FF] flex-shrink-0" />
               {/* Avatar */}
               <div className="flex-shrink-0">
                 {f.avatar_url ? (

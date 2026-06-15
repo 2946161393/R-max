@@ -13,6 +13,8 @@ export default function AdminOverview() {
     shadowBanned: 0,
     matches: 0,
     notifications: 0,
+    pendingVerifications: 0,
+    flaggedContent: 0,
   })
   const [recentUsers, setRecentUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -34,6 +36,24 @@ export default function AdminOverview() {
         .from('notifications')
         .select('id')
 
+      // Caregivers awaiting identity verification
+      const { data: pendingVerif } = await supabase
+        .from('caregiver_profiles')
+        .select('id')
+        .eq('verification_status', 'pending')
+
+      // Flagged content awaiting moderation (guarded: table may be empty/absent)
+      let flaggedCount = 0
+      try {
+        const { data: flagged } = await supabase
+          .from('reports')
+          .select('id')
+          .eq('status', 'pending')
+        flaggedCount = flagged?.length || 0
+      } catch {
+        flaggedCount = 0
+      }
+
       setStats({
         totalUsers: users?.length || 0,
         families: users?.filter(u => u.role === 'family').length || 0,
@@ -42,6 +62,8 @@ export default function AdminOverview() {
         shadowBanned: users?.filter(u => u.is_shadow_banned).length || 0,
         matches: matches?.length || 0,
         notifications: notifications?.length || 0,
+        pendingVerifications: pendingVerif?.length || 0,
+        flaggedContent: flaggedCount,
       })
       setRecentUsers(users?.slice(0, 5) || [])
       setLoading(false)
@@ -55,11 +77,73 @@ export default function AdminOverview() {
     </div>
   )
 
+  // Build the action items list — only things that need attention
+  const actionItems = [
+    {
+      show: stats.pendingVerifications > 0,
+      count: stats.pendingVerifications,
+      icon: '🛡️',
+      title: `${stats.pendingVerifications} caregiver${stats.pendingVerifications > 1 ? 's' : ''} awaiting verification`,
+      desc: 'Review submitted ID and selfie documents',
+      path: '/admin/caregivers',
+      accent: 'amber',
+    },
+    {
+      show: stats.flaggedContent > 0,
+      count: stats.flaggedContent,
+      icon: '🚩',
+      title: `${stats.flaggedContent} item${stats.flaggedContent > 1 ? 's' : ''} flagged for review`,
+      desc: 'Moderate reported content',
+      path: '/admin/moderation',
+      accent: 'red',
+    },
+  ].filter(a => a.show)
+
+  const accentClasses: Record<string, string> = {
+    amber: 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/60',
+    red: 'bg-red-500/10 border-red-500/30 hover:border-red-500/60',
+  }
+  const accentText: Record<string, string> = {
+    amber: 'text-amber-300',
+    red: 'text-red-300',
+  }
+
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">Overview</h1>
         <p className="text-gray-400 mt-1">Platform health at a glance</p>
+      </div>
+
+      {/* Needs your attention — action center */}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Needs your attention</h2>
+        {actionItems.length === 0 ? (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6 flex items-center gap-3">
+            <span className="text-2xl">✅</span>
+            <div>
+              <div className="font-semibold text-green-300">All caught up!</div>
+              <div className="text-sm text-gray-400 mt-0.5">No pending verifications or flagged content right now.</div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {actionItems.map(item => (
+              <button
+                key={item.path}
+                onClick={() => router.push(item.path)}
+                className={`w-full flex items-center gap-4 rounded-2xl border p-5 text-left transition ${accentClasses[item.accent]}`}
+              >
+                <span className="text-2xl">{item.icon}</span>
+                <div className="flex-1">
+                  <div className={`font-semibold ${accentText[item.accent]}`}>{item.title}</div>
+                  <div className="text-sm text-gray-400 mt-0.5">{item.desc}</div>
+                </div>
+                <span className="text-gray-500 text-lg">→</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Stats Grid */}
