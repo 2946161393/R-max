@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 
 const SERVICE_OPTIONS = [
   { value: 'childcare', label: 'Childcare' },
-  { value: 'babysitter', label: 'Babysitter' },
   { value: 'elder_care', label: 'Senior Care' },
   { value: 'housekeeping', label: 'Housekeeping' },
   { value: 'chef', label: 'Personal Chef' },

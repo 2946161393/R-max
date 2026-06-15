@@ -1,6 +1,15 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const ADMIN_EMAILS = ['zwang168@seas.upenn.edu', 'zijinwang97@gmail.com', 'zijinwang168@gmail.com']
+
+// Caregiver-only private subpages. Everything else under /caregiver/ (e.g. /caregiver/{uuid})
+// is a public profile page that families need to view, so it is NOT restricted.
+const CAREGIVER_PRIVATE_PAGES = [
+  'dashboard', 'profile', 'requests', 'verify',
+  'applications', 'activity', 'chat', 'onboarding', 'availability',
+]
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -22,26 +31,52 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname
 
-  // 未登录用户访问受保护页面
-  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+  // Unauthenticated users hitting protected pages
+  if (!user && pathname.startsWith('/dashboard')) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Ban 检查 — 已登录用户
   if (user) {
+    // Fetch ban status + role in one query
     const { data: userData } = await supabase
       .from('users')
-      .select('is_banned, ban_reason')
+      .select('is_banned, ban_reason, role')
       .eq('id', user.id)
       .single()
 
+    // Ban check
     if (userData?.is_banned) {
-      // 已 ban 的用户只能访问 /banned 页面
-      if (!request.nextUrl.pathname.startsWith('/banned')) {
+      if (!pathname.startsWith('/banned')) {
         const url = new URL('/banned', request.url)
         url.searchParams.set('reason', userData.ban_reason || 'Violation of terms of service')
         return NextResponse.redirect(url)
+      }
+      return supabaseResponse
+    }
+
+    const role = userData?.role
+    const isAdmin = ADMIN_EMAILS.includes(user.email || '')
+
+    // --- Role-based route isolation ---
+
+    // Admin pages: only admin emails
+    if (pathname.startsWith('/admin') && !isAdmin) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    // Family pages: only family role (admins allowed for support)
+    if (pathname.startsWith('/family') && role !== 'family' && !isAdmin) {
+      return NextResponse.redirect(new URL('/caregiver/dashboard', request.url))
+    }
+
+    // Caregiver PRIVATE pages: only caregiver role (admins allowed).
+    // Public caregiver profile pages (/caregiver/{uuid}) are NOT restricted.
+    const segments = pathname.split('/').filter(Boolean) // e.g. ['caregiver', 'dashboard']
+    if (segments[0] === 'caregiver' && CAREGIVER_PRIVATE_PAGES.includes(segments[1])) {
+      if (role !== 'caregiver' && !isAdmin) {
+        return NextResponse.redirect(new URL('/family/dashboard', request.url))
       }
     }
   }

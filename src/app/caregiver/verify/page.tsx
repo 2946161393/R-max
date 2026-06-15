@@ -32,7 +32,7 @@ export default function CaregiverVerifyPage() {
 
       setUser(userData)
       setProfile(caregiverData)
-      // If already submitted or verified, reflect that
+      // Pending or verified => show status screen. Rejected => allow re-submit (stays on upload form).
       if (caregiverData?.verification_status === 'pending' || caregiverData?.is_verified) {
         setSubmitted(true)
       }
@@ -150,6 +150,7 @@ export default function CaregiverVerifyPage() {
   }
 
   const canSubmit = idFile && selfieFile && !submitting
+  const wasRejected = profile?.verification_status === 'rejected'
 
   return (
     <div className="min-h-screen bg-[#FAFCFF]">
@@ -163,6 +164,21 @@ export default function CaregiverVerifyPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-6 py-8">
+        {/* Rejected notice */}
+        {wasRejected && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="text-xl">⚠️</div>
+              <div>
+                <div className="font-semibold text-red-700 text-sm">Your previous submission wasn't approved</div>
+                <div className="text-xs text-red-600 mt-1">
+                  This usually happens when the photos are blurry, cut off, or don't match. Please upload a clear photo of your ID and a well-lit selfie, then submit again.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Why verify */}
         <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-[#7FB3FF]/30 rounded-2xl p-5 mb-6">
           <div className="flex items-start gap-3">
@@ -257,7 +273,7 @@ export default function CaregiverVerifyPage() {
           disabled={!canSubmit}
           className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm disabled:opacity-40 transition"
           style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
-          {submitting ? 'Submitting...' : 'Submit for Verification'}
+          {submitting ? 'Submitting...' : wasRejected ? 'Re-submit for Verification' : 'Submit for Verification'}
         </button>
         {!canSubmit && !submitting && (
           <p className="text-center text-xs text-gray-400 mt-2">
