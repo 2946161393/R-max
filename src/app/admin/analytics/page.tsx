@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+const RANGE_OPTIONS = [
+  { label: '7 days', days: 7 },
+  { label: '30 days', days: 30 },
+  { label: '90 days', days: 90 },
+]
+
 export default function AdminAnalytics() {
   const [data, setData] = useState<any>({
     users: [],
@@ -10,6 +16,7 @@ export default function AdminAnalytics() {
     notifications: [],
   })
   const [loading, setLoading] = useState(true)
+  const [rangeDays, setRangeDays] = useState(30)
   const supabase = createClient()
 
   useEffect(() => {
@@ -48,14 +55,15 @@ export default function AdminAnalytics() {
     ? Math.round((notifications.filter((n: any) => n.type === 'caregiver_interested').length / notifications.filter((n: any) => n.type === 'new_match').length) * 100) || 0
     : 0
 
-  // Signups by day (last 7 days)
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
+  // Signups by day over the selected range
+  const rangeDaysArr = Array.from({ length: rangeDays }, (_, i) => {
     const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
+    d.setDate(d.getDate() - (rangeDays - 1 - i))
     return d.toISOString().split('T')[0]
   })
 
-  const signupsByDay = last7Days.map(day => ({
+  const signupsByDay = rangeDaysArr.map(day => ({
+    date: day,
     day: new Date(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     families: families.filter((u: any) => u.created_at?.startsWith(day)).length,
     caregivers: caregivers.filter((u: any) => u.created_at?.startsWith(day)).length,
@@ -63,27 +71,36 @@ export default function AdminAnalytics() {
 
   const maxSignups = Math.max(...signupsByDay.map(d => d.families + d.caregivers), 1)
 
-  // Service breakdown
-  const serviceCount: Record<string, number> = {}
-  caregivers.forEach((c: any) => {
-    // We need to get this from caregiver_profiles but keeping it simple
-  })
+  // Signups within the selected range (for the summary line)
+  const cutoffTime = Date.now() - rangeDays * 24 * 60 * 60 * 1000
+  const signupsInRange = users.filter((u: any) => new Date(u.created_at).getTime() >= cutoffTime).length
+
+  // When the range is wide, showing every day's label gets cramped — show a subset
+  const labelEvery = rangeDays <= 14 ? 1 : rangeDays <= 30 ? 3 : 7
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Analytics</h1>
-        <p className="text-gray-400 mt-1">Platform performance metrics</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Analytics</h1>
+          <p className="text-gray-400 mt-1">Platform performance metrics</p>
+        </div>
+        <div className="flex gap-2">
+          {RANGE_OPTIONS.map(opt => (
+            <button key={opt.days} onClick={() => setRangeDays(opt.days)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                rangeDays === opt.days ? 'bg-[#7FB3FF] text-white' : 'bg-gray-900 border border-gray-700 text-gray-400 hover:text-white'
+              }`}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total Users', value: users.length, icon: '👥', change: '+' + users.filter((u: any) => {
-            const d = new Date(u.created_at)
-            const now = new Date()
-            return now.getTime() - d.getTime() < 7 * 24 * 60 * 60 * 1000
-          }).length + ' this week' },
+          { label: 'Total Users', value: users.length, icon: '👥', change: `+${signupsInRange} in ${rangeDays}d` },
           { label: 'Match Rate', value: matchRate + '%', icon: '🎯', change: acceptedMatches.length + ' accepted' },
           { label: 'Response Rate', value: caregiverResponseRate + '%', icon: '💬', change: 'Caregiver responses' },
           { label: 'Total Matches', value: matches.length, icon: '🤝', change: acceptedMatches.length + ' successful' },
@@ -99,30 +116,26 @@ export default function AdminAnalytics() {
 
       {/* User Growth Chart */}
       <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 mb-6">
-        <h2 className="font-semibold text-white mb-6">Signups — Last 7 Days</h2>
-        <div className="flex items-end gap-3 h-40">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-semibold text-white">Signups — Last {rangeDays} Days</h2>
+          <span className="text-xs text-gray-500">{signupsInRange} total in range</span>
+        </div>
+        <div className="flex items-end gap-1 h-40">
           {signupsByDay.map((d, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex flex-col gap-0.5 justify-end" style={{ height: '120px' }}>
-                {/* Caregivers bar */}
-                <div
-                  className="w-full rounded-t bg-[#A78BFA] transition-all"
-                  style={{
-                    height: `${(d.caregivers / maxSignups) * 100}px`,
-                    minHeight: d.caregivers > 0 ? '4px' : '0'
-                  }}
-                />
-                {/* Families bar */}
-                <div
-                  className="w-full rounded-t bg-[#7FB3FF] transition-all"
-                  style={{
-                    height: `${(d.families / maxSignups) * 100}px`,
-                    minHeight: d.families > 0 ? '4px' : '0'
-                  }}
-                />
+            <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+              {/* Tooltip on hover */}
+              <div className="absolute -top-10 hidden group-hover:block bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-white whitespace-nowrap z-10">
+                {d.day}: {d.families + d.caregivers}
               </div>
-              <div className="text-xs text-gray-500 text-center">{d.day}</div>
-              <div className="text-xs text-white font-medium">{d.families + d.caregivers}</div>
+              <div className="w-full flex flex-col gap-0.5 justify-end" style={{ height: '120px' }}>
+                <div className="w-full rounded-t bg-[#A78BFA] transition-all"
+                  style={{ height: `${(d.caregivers / maxSignups) * 100}px`, minHeight: d.caregivers > 0 ? '4px' : '0' }} />
+                <div className="w-full rounded-t bg-[#7FB3FF] transition-all"
+                  style={{ height: `${(d.families / maxSignups) * 100}px`, minHeight: d.families > 0 ? '4px' : '0' }} />
+              </div>
+              <div className="text-[10px] text-gray-500 text-center h-3">
+                {i % labelEvery === 0 ? d.day : ''}
+              </div>
             </div>
           ))}
         </div>
@@ -149,10 +162,8 @@ export default function AdminAnalytics() {
                 <span className="text-white">{families.length}</span>
               </div>
               <div className="w-full bg-gray-800 rounded-full h-2">
-                <div
-                  className="h-2 rounded-full bg-[#7FB3FF]"
-                  style={{ width: `${(families.length / Math.max(users.length, 1)) * 100}%` }}
-                />
+                <div className="h-2 rounded-full bg-[#7FB3FF]"
+                  style={{ width: `${(families.length / Math.max(users.length, 1)) * 100}%` }} />
               </div>
             </div>
             <div>
@@ -161,10 +172,8 @@ export default function AdminAnalytics() {
                 <span className="text-white">{caregivers.length}</span>
               </div>
               <div className="w-full bg-gray-800 rounded-full h-2">
-                <div
-                  className="h-2 rounded-full bg-[#A78BFA]"
-                  style={{ width: `${(caregivers.length / Math.max(users.length, 1)) * 100}%` }}
-                />
+                <div className="h-2 rounded-full bg-[#A78BFA]"
+                  style={{ width: `${(caregivers.length / Math.max(users.length, 1)) * 100}%` }} />
               </div>
             </div>
           </div>
@@ -192,10 +201,8 @@ export default function AdminAnalytics() {
                   <span className="text-white">{item.value}</span>
                 </div>
                 <div className="w-full bg-gray-800 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full ${item.color}`}
-                    style={{ width: `${(item.value / Math.max(families.length, 1)) * 100}%` }}
-                  />
+                  <div className={`h-2 rounded-full ${item.color}`}
+                    style={{ width: `${(item.value / Math.max(families.length, 1)) * 100}%` }} />
                 </div>
               </div>
             ))}
