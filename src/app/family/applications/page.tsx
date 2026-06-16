@@ -12,6 +12,7 @@ const EXPERIENCE_LABELS: Record<string, string> = {
 function ApplicationsContent() {
   const [user, setUser] = useState<any>(null)
   const [request, setRequest] = useState<any>(null)
+  // "applications" here are caregiver-initiated matches for this request
   const [applications, setApplications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
@@ -37,9 +38,9 @@ function ApplicationsContent() {
 
       setRequest(requestData)
 
-      // Fetch applications with caregiver details
-      const { data: appsData } = await supabase
-        .from('applications')
+      // Fetch caregiver-initiated matches for this request (the "applications")
+      const { data: matchData } = await supabase
+        .from('matches')
         .select(`
           *,
           caregiver_profiles (
@@ -50,35 +51,66 @@ function ApplicationsContent() {
           )
         `)
         .eq('request_id', requestId)
+        .eq('initiated_by', 'caregiver')
         .order('created_at', { ascending: false })
 
-      setApplications(appsData || [])
+      setApplications(matchData || [])
       setLoading(false)
     }
     load()
   }, [requestId])
 
-  const updateStatus = async (appId: string, status: 'accepted' | 'declined', caregiverUserId: string) => {
-    setUpdating(appId)
+  // Family responds to a caregiver-initiated match.
+  // Accept -> family_interested=true; if caregiver already interested -> mutual match (accepted).
+  // Decline -> family_interested=false, status=declined.
+  const updateStatus = async (matchId: string, action: 'accepted' | 'declined', caregiverUserId: string) => {
+    setUpdating(matchId)
 
-    await supabase.from('applications').update({ status }).eq('id', appId)
+    if (action === 'accepted') {
+      // Both sides interested → it's a match
+      await supabase.from('matches')
+        .update({ family_interested: true, status: 'accepted' })
+        .eq('id', matchId)
 
-    // Notify caregiver
-    const statusMsg = status === 'accepted'
-      ? `Great news! The family has accepted your application. You can now message them.`
-      : `Thank you for applying. Unfortunately, the family has decided to go in a different direction.`
+      // Notify both parties — mutual match
+      await supabase.from('notifications').insert([
+        {
+          user_id: user?.id,
+          type: 'mutual_match',
+          title: "🎉 It's a match!",
+          body: 'Both you and the caregiver are interested. You can now message each other!',
+          data: { matchId, caregiverUserId }
+        },
+        {
+          user_id: caregiverUserId,
+          type: 'mutual_match',
+          title: "🎉 It's a match!",
+          body: 'Both you and the family are interested. You can now message each other!',
+          data: { matchId, familyUserId: user?.id }
+        }
+      ])
 
-    await supabase.from('notifications').insert({
-      user_id: caregiverUserId,
-      type: status === 'accepted' ? 'application_accepted' : 'application_declined',
-      title: status === 'accepted' ? '🎉 Your application was accepted!' : 'Application update',
-      body: statusMsg,
-      data: { requestId, familyUserId: user?.id }
-    })
+      setApplications(prev =>
+        prev.map(a => a.id === matchId ? { ...a, family_interested: true, status: 'accepted' } : a)
+      )
+    } else {
+      await supabase.from('matches')
+        .update({ family_interested: false, status: 'declined' })
+        .eq('id', matchId)
 
-    setApplications(prev =>
-      prev.map(a => a.id === appId ? { ...a, status } : a)
-    )
+      await supabase.from('notifications').insert({
+        user_id: caregiverUserId,
+        type: 'application_declined',
+        title: 'Application update',
+        body: 'Thank you for applying. The family has decided to go in a different direction.',
+        data: { requestId, familyUserId: user?.id }
+      })
+
+      setApplications(prev =>
+        prev.map(a => a.id === matchId ? { ...a, family_interested: false, status: 'declined' } : a)
+      )
+    }
+
     setUpdating(null)
   }
 
@@ -88,8 +120,9 @@ function ApplicationsContent() {
     </div>
   )
 
-  const pending = applications.filter(a => a.status === 'pending')
-  const responded = applications.filter(a => a.status !== 'pending')
+  // Pending = caregiver interested, family hasn't responded yet
+  const pending = applications.filter(a => a.family_interested === null && a.status !== 'declined')
+  const responded = applications.filter(a => a.family_interested !== null || a.status === 'declined')
 
   return (
     <div className="min-h-screen bg-[#FAFCFF]">
@@ -144,7 +177,7 @@ function ApplicationsContent() {
                       onAccept={() => updateStatus(app.id, 'accepted', app.caregiver_profiles?.users?.id)}
                       onDecline={() => updateStatus(app.id, 'declined', app.caregiver_profiles?.users?.id)}
                       onViewProfile={() => router.push(`/caregiver/${app.caregiver_profiles?.users?.id}`)}
-                      onMessage={() => router.push(`/messages?with=${app.caregiver_profiles?.users?.id}`)}
+                      onMessage={() => router.push(`/messages/${app.caregiver_profiles?.users?.id}`)}
                     />
                   ))}
                 </div>
@@ -164,7 +197,7 @@ function ApplicationsContent() {
                       onAccept={() => updateStatus(app.id, 'accepted', app.caregiver_profiles?.users?.id)}
                       onDecline={() => updateStatus(app.id, 'declined', app.caregiver_profiles?.users?.id)}
                       onViewProfile={() => router.push(`/caregiver/${app.caregiver_profiles?.users?.id}`)}
-                      onMessage={() => router.push(`/messages?with=${app.caregiver_profiles?.users?.id}`)}
+                      onMessage={() => router.push(`/messages/${app.caregiver_profiles?.users?.id}`)}
                     />
                   ))}
                 </div>
@@ -188,12 +221,16 @@ function ApplicationCard({ app, updating, onAccept, onDecline, onViewProfile, on
   const cp = app.caregiver_profiles
   const u = cp?.users
   const answers = cp?.onboarding_answers || {}
-  const isPending = app.status === 'pending'
+  // Derive display state from the unified match fields
+  const isPending = app.family_interested === null && app.status !== 'declined'
+  const isAccepted = app.status === 'accepted'
+  const isDeclined = app.status === 'declined' || app.family_interested === false
+  const message = app.initiator_message
 
   return (
     <div className={`bg-white rounded-2xl border p-5 transition ${
-      app.status === 'accepted' ? 'border-green-200'
-      : app.status === 'declined' ? 'border-gray-100 opacity-60'
+      isAccepted ? 'border-green-200'
+      : isDeclined ? 'border-gray-100 opacity-60'
       : 'border-gray-100'
     }`}>
       <div className="flex items-start gap-3">
@@ -212,11 +249,11 @@ function ApplicationCard({ app, updating, onAccept, onDecline, onViewProfile, on
               <span className="text-xs bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full">✓ Verified</span>
             )}
             <span className={`text-xs px-2 py-0.5 rounded-full ${
-              app.status === 'accepted' ? 'bg-green-100 text-green-600'
-              : app.status === 'declined' ? 'bg-gray-100 text-gray-500'
+              isAccepted ? 'bg-green-100 text-green-600'
+              : isDeclined ? 'bg-gray-100 text-gray-500'
               : 'bg-blue-100 text-blue-500'
             }`}>
-              {app.status === 'pending' ? 'New' : app.status}
+              {isPending ? 'New' : isAccepted ? 'matched' : 'declined'}
             </span>
           </div>
 
@@ -231,15 +268,15 @@ function ApplicationCard({ app, updating, onAccept, onDecline, onViewProfile, on
             {cp?.years_experience != null && <span>· {EXPERIENCE_LABELS[String(cp.years_experience)]}</span>}
           </div>
 
-          {/* Application message */}
-          {app.message && (
+          {/* Caregiver's intro message */}
+          {message && (
             <div className="mt-2 bg-gray-50 rounded-xl px-3 py-2">
-              <p className="text-xs text-gray-600 leading-relaxed">"{app.message}"</p>
+              <p className="text-xs text-gray-600 leading-relaxed">"{message}"</p>
             </div>
           )}
 
           {/* Bio snippet */}
-          {cp?.bio && !app.message && (
+          {cp?.bio && !message && (
             <p className="text-xs text-gray-400 mt-1.5 line-clamp-2 leading-relaxed">{cp.bio}</p>
           )}
 
@@ -267,7 +304,7 @@ function ApplicationCard({ app, updating, onAccept, onDecline, onViewProfile, on
               ✕
             </button>
           </>
-        ) : app.status === 'accepted' ? (
+        ) : isAccepted ? (
           <>
             <button onClick={onMessage}
               className="flex-1 py-2 rounded-xl text-xs font-semibold text-white transition"

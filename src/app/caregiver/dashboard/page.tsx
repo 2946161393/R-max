@@ -32,10 +32,12 @@ export default function CaregiverDashboard() {
 
       let appsData: any[] = []
       if (caregiverData?.id) {
+        // "My applications" = caregiver-initiated matches by this caregiver
         const { data: rawApps } = await supabase
-          .from('applications')
+          .from('matches')
           .select(`*, service_requests(id, service_type, status, ai_job_post, created_at, family_profiles(user_id))`)
           .eq('caregiver_id', caregiverData.id)
+          .eq('initiated_by', 'caregiver')
           .order('created_at', { ascending: false })
 
         const familyUserIds = [...new Set(
@@ -136,11 +138,18 @@ export default function CaregiverDashboard() {
     </div>
   )
 
+  // Derive a display status from the unified match fields
+  const displayStatus = (a: any) => {
+    if (a.status === 'accepted') return 'accepted'
+    if (a.status === 'declined' || a.family_interested === false) return 'declined'
+    return 'pending'
+  }
+
   const unreadCount = notifications.filter(n => !n.read).length
   const previewNotifs = notifications.slice(0, 3)
   const previewApps = applications.slice(0, 2)
-  const acceptedApps = applications.filter(a => a.status === 'accepted')
-  const pendingApps = applications.filter(a => a.status === 'pending')
+  const acceptedApps = applications.filter(a => displayStatus(a) === 'accepted')
+  const pendingApps = applications.filter(a => displayStatus(a) === 'pending')
 
   const isVerified = profile?.is_verified
   const completionItems = [
@@ -355,6 +364,7 @@ export default function CaregiverDashboard() {
                 const req = app.service_requests
                 const familyUser = app.familyUser
                 const familyUserId = req?.family_profiles?.user_id
+                const status = displayStatus(app)
                 const nameParts = (familyUser?.full_name || '').split(' ').filter(Boolean)
                 const displayName = nameParts.length > 1
                   ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}.`
@@ -362,8 +372,8 @@ export default function CaregiverDashboard() {
 
                 return (
                   <div key={app.id} className={`rounded-xl border p-3 ${
-                    app.status === 'accepted' ? 'border-green-200 bg-green-50/20'
-                    : app.status === 'declined' ? 'border-red-100 opacity-60'
+                    status === 'accepted' ? 'border-green-200 bg-green-50/20'
+                    : status === 'declined' ? 'border-red-100 opacity-60'
                     : 'border-gray-100'
                   }`}>
                     <div className="flex items-center gap-3">
@@ -378,16 +388,16 @@ export default function CaregiverDashboard() {
                           <span className="text-sm font-medium text-gray-900">{displayName}</span>
                           <span className="text-xs text-gray-400 capitalize">{req?.service_type}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            app.status === 'accepted' ? 'bg-green-100 text-green-600'
-                            : app.status === 'declined' ? 'bg-red-100 text-red-400'
+                            status === 'accepted' ? 'bg-green-100 text-green-600'
+                            : status === 'declined' ? 'bg-red-100 text-red-400'
                             : 'bg-yellow-100 text-yellow-600'
-                          }`}>{app.status}</span>
+                          }`}>{status}</span>
                         </div>
                         <div className="text-xs text-gray-300 mt-0.5">
                           Applied {new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </div>
                       </div>
-                      {app.status === 'accepted' && familyUserId && (
+                      {status === 'accepted' && familyUserId && (
                         <button onClick={() => router.push(`/messages/${familyUserId}`)}
                           className="text-xs px-3 py-1.5 rounded-lg text-white flex-shrink-0"
                           style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>

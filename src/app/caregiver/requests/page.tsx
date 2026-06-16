@@ -47,6 +47,7 @@ export default function CaregiverRequestsPage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [requests, setRequests] = useState<any[]>([])
+  // Tracks request_ids this caregiver is already connected to (via matches table)
   const [myApplications, setMyApplications] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [applying, setApplying] = useState<string | null>(null)
@@ -74,12 +75,13 @@ export default function CaregiverRequestsPage() {
       const { data: caregiverData } = await supabase
         .from('caregiver_profiles').select('*').eq('user_id', authUser.id).single()
 
+      // Pull open requests + how many matches each already has (replaces applications count)
       const { data: requestsData } = await supabase
         .from('service_requests')
         .select(`
           *,
           family_profiles ( id, onboarding_answers, user_id ),
-          applications ( id )
+          matches ( id )
         `)
         .eq('status', 'open')
         .neq('service_type', 'manual')
@@ -105,11 +107,12 @@ export default function CaregiverRequestsPage() {
         familyUser: familyUsersMap[r.family_profiles?.user_id] || null
       }))
 
+      // Which requests is this caregiver already connected to? (any match row, either direction)
       let myApps = new Set<string>()
       if (caregiverData?.id) {
-        const { data: appsData } = await supabase
-          .from('applications').select('request_id').eq('caregiver_id', caregiverData.id)
-        appsData?.forEach((a: any) => myApps.add(a.request_id))
+        const { data: matchData } = await supabase
+          .from('matches').select('request_id').eq('caregiver_id', caregiverData.id)
+        matchData?.forEach((m: any) => myApps.add(m.request_id))
       }
 
       setUser(userData)
@@ -153,22 +156,35 @@ export default function CaregiverRequestsPage() {
     if (!applyingTo || !profile?.id) return
     setApplying(applyingTo.id)
 
-    const { error } = await supabase.from('applications').insert({
+    const introMessage = message || `Hi! I'm interested in this ${applyingTo.service_type} position. I'd love to connect!`
+
+    // Caregiver applying = caregiver-initiated match (mirror of the AI/family path).
+    // caregiver_interested=true, family_interested=null, waiting on the family.
+    const { error } = await supabase.from('matches').insert({
       request_id: applyingTo.id,
       caregiver_id: profile.id,
-      message: message || `Hi! I'm interested in this ${applyingTo.service_type} position. I'd love to connect!`,
-      status: 'pending'
+      status: 'pending',
+      caregiver_interested: true,
+      family_interested: null,
+      initiator_message: introMessage,
+      initiated_by: 'caregiver',
     })
 
     if (!error) {
       const familyUserId = applyingTo.familyUser?.id
       if (familyUserId) {
+        // Unified notification type so the family side can wrap it in Ruah narration
         await supabase.from('notifications').insert({
           user_id: familyUserId,
-          type: 'new_application',
-          title: `${user?.full_name} applied to your request! 📩`,
-          body: message || `${user?.full_name} is interested in your ${applyingTo.service_type} position.`,
-          data: { caregiverUserId: user?.id, caregiverName: user?.full_name, requestId: applyingTo.id }
+          type: 'new_match',
+          title: `${user?.full_name} is interested in your request! 🎯`,
+          body: introMessage,
+          data: {
+            caregiverUserId: user?.id,
+            caregiverName: user?.full_name,
+            requestId: applyingTo.id,
+            initiatedBy: 'caregiver',
+          }
         })
       }
       setMyApplications(prev => new Set([...prev, applyingTo.id]))
@@ -287,7 +303,7 @@ export default function CaregiverRequestsPage() {
             {filtered.map(r => {
               const familyUser = r.familyUser
               const alreadyApplied = myApplications.has(r.id)
-              const appCount = r.applications?.length || 0
+              const appCount = r.matches?.length || 0
               const scheduleDays = r.schedule_days || {}
               const sortedDays = DAY_ORDER.filter(d => scheduleDays[d])
               const isExpanded = expandedId === r.id
@@ -317,7 +333,7 @@ export default function CaregiverRequestsPage() {
                             {displayName || 'A Family'}
                           </span>
                           {alreadyApplied && (
-                            <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">✓ Applied</span>
+                            <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">✓ Connected</span>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-400 flex-wrap">
@@ -331,7 +347,7 @@ export default function CaregiverRequestsPage() {
                           {distance !== undefined && (
                             <span className="text-[#7FB3FF] font-medium">· {distance < 1 ? '< 1' : Math.round(distance)} mi away</span>
                           )}
-                          {appCount > 0 && <span>· {appCount} applicant{appCount > 1 ? 's' : ''}</span>}
+                          {appCount > 0 && <span>· {appCount} interested</span>}
                         </div>
                       </div>
                     </div>
@@ -400,7 +416,7 @@ export default function CaregiverRequestsPage() {
 
                     {alreadyApplied ? (
                       <div className="w-full py-2.5 rounded-xl text-xs font-medium text-center bg-gray-50 text-gray-400 border border-gray-100">
-                        ✓ Application sent
+                        ✓ Connected
                       </div>
                     ) : (
                       <div className="flex justify-end">

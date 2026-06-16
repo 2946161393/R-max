@@ -45,7 +45,7 @@ export default function FamilyDashboard() {
       if (familyData?.id) {
         const { data } = await supabase
           .from('service_requests')
-          .select('*, applications(id, status)')
+          .select('*, matches(id, status)')
           .eq('family_id', familyData.id)
           .order('created_at', { ascending: false })
         requestsData = data || []
