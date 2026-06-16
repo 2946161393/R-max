@@ -167,7 +167,7 @@ export default function CaregiverPublicProfile() {
               )}
               {viewerRole === 'family' && (
                 <button
-                  onClick={() => router.push('/family/chat')}
+                  onClick={() => router.push(`/family/chat?caregiver=${profileUser.id}&name=${encodeURIComponent(profileUser.full_name || 'this caregiver')}`)}
                   className="flex-1 py-3 rounded-xl text-sm font-medium border-2 border-[#7FB3FF] text-[#7FB3FF] hover:bg-blue-50 transition">
                   ✨ Ask Ruah About This Caregiver
                 </button>

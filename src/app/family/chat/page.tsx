@@ -101,9 +101,24 @@ export default function ChatPage() {
   const [familyProfile, setFamilyProfile] = useState<any>(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
   const [contacting, setContacting] = useState<string | null>(null)
+  // Holds a caregiver passed via URL (?caregiver=...&name=...) so we can
+  // auto-start a focused conversation about that specific caregiver.
+  const [focusCaregiver, setFocusCaregiver] = useState<{ id: string; name: string } | null>(null)
+  const [autoStarted, setAutoStarted] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  // Read caregiver context from the URL once on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const cgId = sp.get('caregiver')
+    const cgName = sp.get('name')
+    if (cgId) {
+      setFocusCaregiver({ id: cgId, name: cgName || 'this caregiver' })
+    }
+  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -117,6 +132,18 @@ export default function ChatPage() {
     }
     load()
   }, [])
+
+  // Once the profile is loaded, if we arrived with a caregiver in the URL,
+  // auto-send a focused opening message about that caregiver.
+  useEffect(() => {
+    if (profileLoaded && focusCaregiver && !autoStarted) {
+      setAutoStarted(true)
+      sendMessage(
+        `Tell me about ${focusCaregiver.name} and help me decide if they're a good fit. If they seem like a match, you can offer to reach out to them for me.`,
+        focusCaregiver.id
+      )
+    }
+  }, [profileLoaded, focusCaregiver, autoStarted])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -136,6 +163,20 @@ export default function ChatPage() {
     })
     const data = await response.json()
     return data.caregivers || []
+  }
+
+  // Fetch a single caregiver card by user id (for the focused-caregiver flow)
+  const fetchCaregiverCard = async (caregiverUserId: string): Promise<CaregiverCard[]> => {
+    const { data } = await supabase
+      .from('caregiver_profiles')
+      .select(`
+        id, user_id, bio, services, languages, years_experience,
+        hourly_rate_min, hourly_rate_max, is_verified,
+        users ( full_name, avatar_url, city )
+      `)
+      .eq('user_id', caregiverUserId)
+      .single()
+    return data ? [data as any] : []
   }
 
   const contactCaregiver = async (cg: CaregiverCard) => {
@@ -178,7 +219,9 @@ export default function ChatPage() {
     }
   }
 
-  const sendMessage = async (text?: string) => {
+  // focusCaregiverId: when set, show this specific caregiver's card with the reply
+  // instead of running a full match search.
+  const sendMessage = async (text?: string, focusCaregiverId?: string) => {
     const userMessage = text || input.trim()
     if (!userMessage || loading || !profileLoaded) return
 
@@ -204,7 +247,16 @@ export default function ChatPage() {
       const data = await response.json()
       const assistantMessage = data.content[0].text
 
-      if (assistantMessage.includes('[FIND_CAREGIVERS]')) {
+      // Focused caregiver flow: attach that one caregiver's card to the reply
+      if (focusCaregiverId) {
+        const cards = await fetchCaregiverCard(focusCaregiverId)
+        const cleanMessage = assistantMessage.replace('[FIND_CAREGIVERS]', '').trim()
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: cleanMessage,
+          caregivers: cards
+        }])
+      } else if (assistantMessage.includes('[FIND_CAREGIVERS]')) {
         const caregivers = await findCaregivers()
         const cleanMessage = assistantMessage.replace('[FIND_CAREGIVERS]', '').trim()
         setMessages(prev => [...prev, {
@@ -354,7 +406,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        {messages.length === 1 && (
+        {messages.length === 1 && !focusCaregiver && (
           <div className="mt-4 space-y-2">
             <p className="text-xs text-gray-400 text-center mb-3">Quick questions to get started</p>
             {SUGGESTIONS.map(s => (
