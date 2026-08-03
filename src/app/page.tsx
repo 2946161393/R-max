@@ -149,14 +149,14 @@ export default function Home() {
       <section className="py-20 px-6 bg-white">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">Safety you can count on</h2>
-            <p className="text-gray-400">Every caregiver on Ruah is carefully vetted</p>
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">How we handle trust</h2>
+            <p className="text-gray-400">What we check, and what we don&rsquo;t. In plain terms.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { emoji: '🔍', title: 'Background checks', desc: 'Every caregiver goes through a thorough background and identity verification process.' },
-              { emoji: '⭐', title: 'Verified reviews', desc: 'Real ratings from real families. No fake reviews, ever.' },
-              { emoji: '🛡', title: 'Safe messaging', desc: 'All communication happens securely within the Ruah platform.' },
+              { emoji: '🪪', title: 'Identity verified', desc: 'Every verified caregiver has had a government ID and a selfie checked by a person on our team.' },
+              { emoji: '🔒', title: 'Documents stay private', desc: 'ID photos are stored privately and are never shown to families. Ever.' },
+              { emoji: '💬', title: 'Coordination on Ruah', desc: 'Messages and the commitments people make stay on the platform, so there is always a record.' },
             ].map(item => (
               <div key={item.title} className="bg-[#FAFCFF] rounded-2xl p-6">
                 <div className="text-3xl mb-4">{item.emoji}</div>
@@ -165,6 +165,12 @@ export default function Home() {
               </div>
             ))}
           </div>
+          <p className="text-center mt-8 text-sm text-gray-500">
+            We don&rsquo;t run background checks.{' '}
+            <Link href="/trust" className="text-[#4A90D9] font-medium hover:underline">
+              Here&rsquo;s what that means, and how to arrange your own →
+            </Link>
+          </p>
         </div>
       </section>
 
@@ -203,6 +209,7 @@ export default function Home() {
           <div className="flex gap-6 text-sm text-gray-400">
             <Link href="/privacy" className="hover:text-gray-600">Privacy</Link>
             <Link href="/terms" className="hover:text-gray-600">Terms</Link>
+            <Link href="/trust" className="hover:text-gray-600">Trust &amp; Safety</Link>
             <a href="mailto:zijinwang168@gmail.com" className="hover:text-gray-600">Contact</a>
           </div>
         </div>

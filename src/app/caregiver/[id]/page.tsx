@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
@@ -118,9 +119,6 @@ export default function CaregiverPublicProfile() {
                 {profile.is_verified && (
                   <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-medium">✓ Verified</span>
                 )}
-                {profile.background_check_status === 'passed' && (
-                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">🛡 Background checked</span>
-                )}
               </div>
 
               {/* Location */}
@@ -238,14 +236,21 @@ export default function CaregiverPublicProfile() {
           </div>
         )}
 
-        {/* Background Check */}
-        {profile.background_check_status === 'passed' && (
-          <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center gap-3 mb-4">
-            <span className="text-2xl">✅</span>
-            <div>
-              <div className="font-semibold text-green-700 text-sm">Background Check Passed</div>
-              <div className="text-xs text-green-600">This caregiver has been verified by Ruah</div>
+        {/* What verification does and does not cover. Shown to families here,
+            at the moment they are deciding, rather than buried in a policy. */}
+        {!isOwnProfile && viewerRole === 'family' && (
+          <div className="bg-[#FAFCFF] border border-gray-100 rounded-2xl p-4 mb-4">
+            <div className="font-semibold text-gray-900 text-sm mb-1">
+              {profile.is_verified ? 'What “verified” means here' : 'Before you hire'}
             </div>
+            <p className="text-xs text-gray-500 leading-relaxed mb-2">
+              {profile.is_verified
+                ? 'We checked this caregiver’s government ID and selfie by hand, so we believe they are who they say they are. That is not a background check — Ruah does not run them.'
+                : 'This caregiver has not completed identity verification, and Ruah does not run background checks on anyone.'}
+            </p>
+            <Link href="/trust" className="text-xs text-[#4A90D9] font-medium hover:underline">
+              How to arrange your own background check →
+            </Link>
           </div>
         )}
 

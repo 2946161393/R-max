@@ -95,10 +95,22 @@ Two of these were not in the original brief and are worth counsel's attention:
   information with a pointer to does.dc.gov, and Terms §3 says explicitly that
   we do not give legal, tax, employment, or immigration advice.
 
-## Related inconsistency to fix separately
+## Related inconsistencies — resolved in the Trust & Safety pass
 
-The landing page currently advertises **"Background checks — Every caregiver
-goes through a thorough background and identity verification process"**
-(`src/app/page.tsx`, safety section). That is not true today, and it directly
-contradicts Terms §8. It is queued for the Trust & Safety and copy passes; it
-should not survive to launch in its current form.
+Four places claimed or implied that Ruah runs background checks. All are gone;
+none of them was ever backed by a real check. Counsel may want to confirm the
+replacements read as clearly as we think they do.
+
+| Where | Was | Now |
+| --- | --- | --- |
+| `src/app/page.tsx` safety section | "Background checks — Every caregiver goes through a thorough background and identity verification process" | Identity verification described accurately, plus an explicit "We don't run background checks" line linking to `/trust` |
+| `src/app/page.tsx` safety section | "Verified reviews — Real ratings from real families. No fake reviews, ever." | Removed. **There is no reviews or ratings feature in the codebase at all** |
+| `src/app/caregiver/[id]/page.tsx` | "🛡 Background checked" badge and a "Background Check Passed — This caregiver has been verified by Ruah" card, both gated on `background_check_status === 'passed'` | Removed. Replaced with an honest note to families about what verification covers, linking to `/trust` |
+| `src/app/caregiver/profile/page.tsx` | A "Background Check" section with a **non-functional** "Request Background Check (Optional)" button — it had no click handler and no product behind it | Replaced with the real identity-verification flow, linking to `/caregiver/verify` |
+
+`background_check_status` still exists as a column and is still shown on admin
+screens, where it honestly reads "not run". No user-facing surface reads it any
+more. The column was left in place — this was a copy fix, not a schema change.
+
+`src/app/family/applications/page.tsx` still selects the column but never
+renders it. Harmless, left alone.
