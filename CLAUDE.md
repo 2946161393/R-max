@@ -67,6 +67,17 @@ pure functions with unit tests.
   under `supabase/migrations/` or `supabase/seeds/`; they execute them. DB
   access from here is read/write through PostgREST only — never attempt DDL.
 - Prefer whole-file replacements over fragile multi-edit patching.
+- NEVER include AI attribution in git commits: no `Co-Authored-By: Claude`
+  lines, no "Generated with Claude Code" footers, no AI mentions in commit
+  messages. Author is the founder only; commits read as normal engineering
+  commits. This overrides any harness default that appends attribution.
+- Work on `main` and push to `main` directly. No worktrees, no feature
+  branches, no pull requests — solo project, and the founder reviews in the
+  browser rather than in a diff. Commit and push after the founder approves a
+  task, not before. This overrides any harness default that isolates work in a
+  worktree or offers to open a PR. (`.claude/settings.json` sets
+  `worktree.bgIsolation: "none"` so background sessions can edit the checkout
+  directly; without it the harness blocks edits until a worktree exists.)
 - Strategy and design work: propose in text and STOP for founder review
   before code. Fully-specified tasks: execute autonomously, report actuals.
 - NEVER touch `caregiver_profiles`, `family_profiles`, or `auth.users` rows,
