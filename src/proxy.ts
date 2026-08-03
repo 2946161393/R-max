@@ -1,7 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-
-const ADMIN_EMAILS = ['zwang168@seas.upenn.edu', 'zijinwang97@gmail.com', 'zijinwang168@gmail.com']
+import { isAdminEmail } from '@/lib/admin/emails'
 
 // Caregiver-only private subpages. Everything else under /caregiver/ (e.g. /caregiver/{uuid})
 // is a public profile page that families need to view, so it is NOT restricted.
@@ -57,7 +56,7 @@ export async function proxy(request: NextRequest) {
     }
 
     const role = userData?.role
-    const isAdmin = ADMIN_EMAILS.includes(user.email || '')
+    const isAdmin = isAdminEmail(user.email)
 
     // --- Role-based route isolation ---
 

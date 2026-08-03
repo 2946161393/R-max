@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-const ADMIN_EMAILS = ['zwang168@seas.upenn.edu', 'zijinwang97@gmail.com', 'zijinwang168@gmail.com']
-
 const EXPERIENCE_LABELS: Record<string, string> = {
   '0': 'Less than 1 year',
   '1': '1–2 years',
@@ -60,14 +58,10 @@ export default function AdminCaregivers() {
   const [sortKey, setSortKey] = useState<SortKey>('newest')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<any>(null)
-  const [adminEmail, setAdminEmail] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setAdminEmail(user?.email || '')
-
       const { data } = await supabase
         .from('users')
         .select(`
@@ -115,7 +109,7 @@ export default function AdminCaregivers() {
     const res = await fetch('/api/admin/verify-caregiver', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, action: 'approve', requesterEmail: adminEmail }),
+      body: JSON.stringify({ userId, action: 'approve' }),
     })
     if (!res.ok) {
       alert('Failed to verify. Please try again.')
@@ -134,7 +128,7 @@ export default function AdminCaregivers() {
     const res = await fetch('/api/admin/verify-caregiver', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, action: 'reject', requesterEmail: adminEmail }),
+      body: JSON.stringify({ userId, action: 'reject' }),
     })
     if (!res.ok) {
       alert('Failed to reject. Please try again.')
@@ -454,7 +448,6 @@ export default function AdminCaregivers() {
       {selected && (
         <CaregiverModal
           caregiver={selected}
-          adminEmail={adminEmail}
           onClose={() => setSelected(null)}
           onBan={banUser}
           onUnban={unbanUser}
@@ -466,9 +459,8 @@ export default function AdminCaregivers() {
   )
 }
 
-function CaregiverModal({ caregiver, adminEmail, onClose, onBan, onUnban, onVerify, onReject }: {
+function CaregiverModal({ caregiver, onClose, onBan, onUnban, onVerify, onReject }: {
   caregiver: any
-  adminEmail: string
   onClose: () => void
   onBan: (id: string, type: 'hard' | 'shadow', reason: string) => void
   onUnban: (id: string) => void
@@ -494,7 +486,6 @@ function CaregiverModal({ caregiver, adminEmail, onClose, onBan, onUnban, onVeri
           body: JSON.stringify({
             idPath: profile.id_photo_path,
             selfiePath: profile.selfie_path,
-            requesterEmail: adminEmail,
           })
         })
         const data = await res.json()

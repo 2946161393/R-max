@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-const ADMIN_EMAILS = ['zwang168@seas.upenn.edu', 'zijinwang97@gmail.com', 'zijinwang168@gmail.com']
+import { requireAdmin } from '@/lib/admin/server'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,12 +9,13 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, action, requesterEmail } = await req.json()
-
-    // Verify the requester is an admin
-    if (!requesterEmail || !ADMIN_EMAILS.includes(requesterEmail)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    // Authorize from the session before reading the body or writing anything.
+    const auth = await requireAdmin()
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
     }
+
+    const { userId, action } = await req.json()
 
     if (!userId || !['approve', 'reject'].includes(action)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })

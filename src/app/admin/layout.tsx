@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-
-const ADMIN_EMAILS = ['zwang168@seas.upenn.edu', 'zijinwang97@gmail.com', 'zijinwang168@gmail.com']
+import { isAdminEmail } from '@/lib/admin/emails'
 
 const NAV_ITEMS = [
   { label: 'Overview', path: '/admin', icon: '📊' },
@@ -26,7 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     const check = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user || !ADMIN_EMAILS.includes(user.email || '')) {
+      if (!isAdminEmail(user?.email)) {
         router.push('/')
         return
       }
