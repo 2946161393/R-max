@@ -362,7 +362,7 @@ function UserProfile({ user }: { user: any }) {
           {[
             { label: 'Services', value: answers.services?.join(', ') },
             { label: 'Children ages', value: answers.childcare_ages?.join(', ') },
-            { label: 'Kids', value: answers.childcare_kids != null ? String(answers.childcare_kids) : null },
+            { label: 'Children', value: answers.childcare_kids != null ? String(answers.childcare_kids) : null },
             { label: 'Type', value: answers.childcare_type },
             { label: 'Schedule', value: answers.childcare_schedule },
             { label: 'Budget', value: answers.childcare_budget || answers.chef_budget || answers.house_budget },

@@ -7,9 +7,15 @@ import { SELECTABLE_SERVICES, SERVICE_FOCUS_NOTE } from '@/lib/services'
 
 const SERVICE_TYPES = SELECTABLE_SERVICES.map(s => ({ id: s.id, label: `${s.emoji} ${s.label}` }))
 
+// Step 1 is the service picker. With one selectable service it asks nothing, so
+// assign it and start at step 2. Restores itself when a second service opens.
+const AUTO_SERVICE: string | null =
+  SELECTABLE_SERVICES.length === 1 ? SELECTABLE_SERVICES[0].id : null
+const FIRST_STEP = AUTO_SERVICE ? 2 : 1
+
 export default function CaregiverOnboarding() {
-  const [step, setStep] = useState(1)
-  const [services, setServices] = useState<string[]>([])
+  const [step, setStep] = useState(FIRST_STEP)
+  const [services, setServices] = useState<string[]>(AUTO_SERVICE ? [AUTO_SERVICE] : [])
   const [languages, setLanguages] = useState<string[]>([])
   const [experience, setExperience] = useState(0)
   const [rateMin, setRateMin] = useState('')
@@ -123,7 +129,9 @@ export default function CaregiverOnboarding() {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setStep(1)} className="flex-1 border border-gray-200 py-3 rounded-lg text-sm">← Back</button>
+              {FIRST_STEP < 2 && (
+                <button onClick={() => setStep(1)} className="flex-1 border border-gray-200 py-3 rounded-lg text-sm">← Back</button>
+              )}
               <button onClick={() => setStep(3)} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium">Continue →</button>
             </div>
           </div>

@@ -66,7 +66,7 @@ export default function RequestSummaryCard({
   if (request.hours_per_week) fields.push({ label: 'Hours', value: `${request.hours_per_week}/week` })
   if (pay) fields.push({ label: 'Pay', value: pay })
   if (city) fields.push({ label: 'Location', value: city })
-  if (childrenAges?.length) fields.push({ label: 'Kids', value: `ages ${[...childrenAges].sort((a, b) => a - b).join(', ')}` })
+  if (childrenAges?.length) fields.push({ label: 'Children', value: `ages ${[...childrenAges].sort((a, b) => a - b).join(', ')}` })
   if (languages.length) fields.push({ label: 'Languages', value: languages.join(', ') })
   if (startDate) fields.push({ label: 'Starts', value: startDate })
 

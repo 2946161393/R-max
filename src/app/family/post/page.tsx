@@ -14,7 +14,7 @@ const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satu
 const LANGUAGE_OPTIONS = ['Mandarin', 'Cantonese', 'English', 'Spanish', 'Other']
 const REQUIREMENTS_OPTIONS = [
   'Light housekeeping', 'Meal preparation', 'Homework help',
-  'Can drive kids', 'Non-smoker', 'Has own transportation',
+  'Can drive children', 'Non-smoker', 'Has own transportation',
   'Bilingual', 'CPR certified', 'Live-in ok',
 ]
 
@@ -94,6 +94,9 @@ function PostRequestContent() {
         }
         const answers = profileData?.onboarding_answers || {}
         if (answers.services?.[0]) setServiceType(answers.services[0])
+        // What they wrote on the last onboarding screen. Prefilled here so it
+        // reaches service_requests.extra_details instead of dying in the profile.
+        if (answers.extra_details) setExtraDetails(answers.extra_details)
         if (answers.childcare_budget) {
           const parts = answers.childcare_budget.replace(/\$/g, '').split('–')
           if (parts[0]) setPayMin(parts[0].trim())

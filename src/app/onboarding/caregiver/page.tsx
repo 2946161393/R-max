@@ -9,9 +9,20 @@ const SERVICES = SELECTABLE_SERVICES
 
 type Answers = Record<string, any>
 
+// One selectable service is not a choice. Assign it and drop the screen; it
+// reappears on its own at two or more, and every step index follows the array.
+const AUTO_SERVICE: string | null = SERVICES.length === 1 ? SERVICES[0].id : null
+
+const STEPS = [
+  ...(AUTO_SERVICE ? [] : ['services']),
+  'experience', 'languages', 'availability', 'living', 'rate', 'zipcode',
+]
+
 export default function CaregiverOnboarding() {
-  const [step, setStep] = useState('services')
-  const [selectedServices, setSelectedServices] = useState<string[]>([])
+  const [step, setStep] = useState(STEPS[0])
+  const [selectedServices, setSelectedServices] = useState<string[]>(
+    AUTO_SERVICE ? [AUTO_SERVICE] : []
+  )
   const [answers, setAnswers] = useState<Answers>({})
   const [zipcode, setZipcode] = useState('')
   const [zipcodeInfo, setZipcodeInfo] = useState<{ city: string; state: string } | null>(null)
@@ -26,8 +37,6 @@ export default function CaregiverOnboarding() {
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
     )
   }
-
-  const STEPS = ['services', 'experience', 'languages', 'availability', 'living', 'rate', 'zipcode']
 
   const next = (current: string) => {
     const idx = STEPS.indexOf(current)

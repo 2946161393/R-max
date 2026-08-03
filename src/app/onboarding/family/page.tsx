@@ -9,11 +9,37 @@ const SERVICES = SELECTABLE_SERVICES
 
 type Answers = Record<string, any>
 
+// Question queue per service. Every category keeps its questions even while it
+// is not selectable — reopening one restores its branch with no work here.
+const buildQueue = (services: string[]) => {
+  const queue: string[] = []
+  if (services.includes('childcare')) queue.push('childcare_type', 'childcare_when', 'childcare_schedule', 'childcare_kids', 'childcare_ages', 'childcare_extras', 'childcare_budget')
+  if (services.includes('chef')) queue.push('chef_type', 'chef_cuisine', 'chef_details', 'chef_budget')
+  if (services.includes('housekeeping')) queue.push('house_type', 'house_size', 'house_frequency', 'house_extras', 'house_budget')
+  if (services.includes('elder_care')) queue.push('elder_needs', 'elder_frequency', 'elder_living', 'elder_budget')
+  if (services.includes('pet_care')) queue.push('pet_type', 'pet_service', 'pet_when', 'pet_budget')
+  if (services.includes('tutoring')) queue.push('tutor_needs', 'tutor_subject', 'tutor_age', 'tutor_budget')
+  return queue
+}
+
+// One selectable service is not a choice. Assign it and open on the first real
+// question instead of asking someone to tap a lone card and then Continue. The
+// screen comes back on its own at two or more, same rule as the onboarding grid
+// and the search filter.
+const AUTO_SERVICE: string | null = SERVICES.length === 1 ? SERVICES[0].id : null
+
 export default function FamilyOnboarding() {
-  const [step, setStep] = useState('services')
-  const [selectedServices, setSelectedServices] = useState<string[]>([])
-  const [serviceQueue, setServiceQueue] = useState<string[]>([])
+  const [step, setStep] = useState<string>(() =>
+    AUTO_SERVICE ? buildQueue([AUTO_SERVICE])[0] : 'services'
+  )
+  const [selectedServices, setSelectedServices] = useState<string[]>(
+    AUTO_SERVICE ? [AUTO_SERVICE] : []
+  )
+  const [serviceQueue, setServiceQueue] = useState<string[]>(() =>
+    AUTO_SERVICE ? buildQueue([AUTO_SERVICE]) : []
+  )
   const [answers, setAnswers] = useState<Answers>({})
+  const [extraDetails, setExtraDetails] = useState('')
   const [zipcode, setZipcode] = useState('')
   const [zipcodeInfo, setZipcodeInfo] = useState<{ city: string; state: string } | null>(null)
   const [zipcodeLoading, setZipcodeLoading] = useState(false)
@@ -26,17 +52,6 @@ export default function FamilyOnboarding() {
     setSelectedServices(prev =>
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
     )
-  }
-
-  const buildQueue = (services: string[]) => {
-    const queue: string[] = []
-    if (services.includes('childcare')) queue.push('childcare_type', 'childcare_when', 'childcare_schedule', 'childcare_kids', 'childcare_ages', 'childcare_extras', 'childcare_budget')
-    if (services.includes('chef')) queue.push('chef_type', 'chef_cuisine', 'chef_details', 'chef_budget')
-    if (services.includes('housekeeping')) queue.push('house_type', 'house_size', 'house_frequency', 'house_extras', 'house_budget')
-    if (services.includes('elder_care')) queue.push('elder_needs', 'elder_frequency', 'elder_living', 'elder_budget')
-    if (services.includes('pet_care')) queue.push('pet_type', 'pet_service', 'pet_when', 'pet_budget')
-    if (services.includes('tutoring')) queue.push('tutor_needs', 'tutor_subject', 'tutor_age', 'tutor_budget')
-    return queue
   }
 
   const startFlow = () => {
@@ -53,8 +68,20 @@ export default function FamilyOnboarding() {
 
   const back = (currentStep: string) => {
     const idx = serviceQueue.indexOf(currentStep)
-    if (idx === 0) setStep('services')
-    else setStep(serviceQueue[idx - 1])
+    if (idx > 0) { setStep(serviceQueue[idx - 1]); return }
+    // First question. With the service screen skipped there is nothing behind
+    // it, so leave the flow rather than showing a screen we chose to hide.
+    if (AUTO_SERVICE) router.push('/')
+    else setStep('services')
+  }
+
+  // "No extras needed" is exclusive: choosing it clears the rest, and choosing
+  // anything else clears it. One place so both extras screens cannot drift.
+  const toggleExtra = (key: string, id: string, exclusiveId = 'none') => {
+    const current: string[] = answers[key] || []
+    if (id === exclusiveId) return [exclusiveId]
+    const without = current.filter(e => e !== exclusiveId)
+    return without.includes(id) ? without.filter(e => e !== id) : [...without, id]
   }
 
   const lookupZipcode = async (zip: string) => {
@@ -86,6 +113,9 @@ export default function FamilyOnboarding() {
       zipcode,
       city: zipcodeInfo?.city,
       state: zipcodeInfo?.state,
+      // Carried into family_profiles.onboarding_answers, then prefilled into
+      // the request form so it lands in service_requests.extra_details.
+      extra_details: extraDetails.trim() || null,
     }
     router.push(`/onboarding/register?role=family&answers=${encodeURIComponent(JSON.stringify(finalAnswers))}`)
   }
@@ -119,7 +149,7 @@ export default function FamilyOnboarding() {
 
         {/* ===== CHILDCARE ===== */}
         {step === 'childcare_type' && (
-          <Q title="What kind of childcare do you need?" onBack={() => setStep('services')}>
+          <Q title="What kind of childcare do you need?" onBack={() => back('childcare_type')}>
             {[
               { id: 'babysitter', label: '🍼 One-time Babysitter', desc: 'For a specific date or occasion' },
               { id: 'nanny', label: '👩‍👧 Recurring Nanny', desc: 'Regular ongoing help' },
@@ -163,7 +193,7 @@ export default function FamilyOnboarding() {
         )}
 
         {step === 'childcare_ages' && (
-          <Q title="How old are your kids?" onBack={() => back('childcare_ages')}>
+          <Q title="How old are your children?" onBack={() => back('childcare_ages')}>
             {[
               { id: 'infant', label: '👶 Infant', desc: '0–12 months' },
               { id: 'toddler', label: '🧒 Toddler', desc: '1–3 years' },
@@ -182,14 +212,13 @@ export default function FamilyOnboarding() {
             {[
               { id: 'bilingual', label: '🗣 Bilingual caregiver', desc: 'Speaks Mandarin, Spanish, etc.' },
               { id: 'homework', label: '📖 Homework help' },
-              { id: 'driving', label: '🚗 Can drive kids' },
+              { id: 'driving', label: '🚗 Can drive children' },
               { id: 'cooking', label: '🍱 Can cook meals' },
               { id: 'none', label: '✅ No extras needed' },
             ].map(opt => <Opt key={opt.id} {...opt} multi selected={(answers.childcare_extras || []).includes(opt.id)}
               onClick={() => {
-                if (opt.id === 'none') { save('childcare_extras', ['none']); next('childcare_extras'); return }
-                const c = (answers.childcare_extras || []).filter((e: string) => e !== 'none')
-                save('childcare_extras', c.includes(opt.id) ? c.filter((e: string) => e !== opt.id) : [...c, opt.id])
+                save('childcare_extras', toggleExtra('childcare_extras', opt.id))
+                if (opt.id === 'none') next('childcare_extras')
               }} />)}
             <button onClick={() => next('childcare_extras')} disabled={!answers.childcare_extras?.length}
               className="w-full mt-4 bg-blue-600 text-white py-4 rounded-2xl font-semibold disabled:opacity-40">Continue →</button>
@@ -317,9 +346,8 @@ export default function FamilyOnboarding() {
               { id: 'none', label: '✅ Standard cleaning only' },
             ].map(opt => <Opt key={opt.id} {...opt} multi selected={(answers.house_extras || []).includes(opt.id)}
               onClick={() => {
-                if (opt.id === 'none') { save('house_extras', ['none']); next('house_extras'); return }
-                const c = (answers.house_extras || []).filter((e: string) => e !== 'none')
-                save('house_extras', c.includes(opt.id) ? c.filter((e: string) => e !== opt.id) : [...c, opt.id])
+                save('house_extras', toggleExtra('house_extras', opt.id))
+                if (opt.id === 'none') next('house_extras')
               }} />)}
             <button onClick={() => next('house_extras')} disabled={!answers.house_extras?.length}
               className="w-full mt-4 bg-blue-600 text-white py-4 rounded-2xl font-semibold disabled:opacity-40">Continue →</button>
@@ -531,13 +559,48 @@ export default function FamilyOnboarding() {
             )}
 
             <button
-              onClick={goToRegister}
+              onClick={() => setStep('extra_details')}
               disabled={!zipcodeInfo || zipcodeLoading}
               className="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold disabled:opacity-40 hover:bg-blue-700 transition"
             >
               Continue →
             </button>
 
+          </div>
+        )}
+
+        {/* ===== ANYTHING ELSE — optional, last screen before signup ===== */}
+        {step === 'extra_details' && (
+          <div>
+            <button onClick={() => setStep('zipcode')}
+              className="text-gray-400 text-sm mb-8 hover:text-gray-600">← Back</button>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Anything else Ruah should know?</h1>
+            <p className="text-gray-400 text-sm mb-6">
+              Allergies, personality fit, a pickup routine — anything. Ruah reads every word.
+            </p>
+            <textarea
+              value={extraDetails}
+              onChange={e => setExtraDetails(e.target.value)}
+              rows={6}
+              // Answers travel to the signup page as a URL query param, so an
+              // unbounded note would break the redirect rather than save.
+              maxLength={1000}
+              className="w-full border-2 border-gray-200 rounded-2xl px-4 py-4 text-sm leading-relaxed focus:outline-none focus:border-blue-400 resize-none"
+              placeholder="My younger one is shy for the first week or so, and there's a peanut allergy in the house..."
+            />
+            <button
+              onClick={goToRegister}
+              disabled={!extraDetails.trim()}
+              className="w-full mt-4 bg-blue-600 text-white py-4 rounded-2xl font-semibold disabled:opacity-40 hover:bg-blue-700 transition"
+            >
+              Continue →
+            </button>
+            <button
+              onClick={() => { setExtraDetails(''); goToRegister() }}
+              className="w-full mt-3 border-2 border-gray-200 text-gray-600 py-4 rounded-2xl font-semibold hover:border-gray-300 transition"
+            >
+              Skip for now
+            </button>
           </div>
         )}
 
@@ -580,7 +643,7 @@ function Opt({ label, desc, selected, onClick, multi }: {
 
 function BudgetRange({ title, unit, options, selected, onSelect, onBack }: {
   title: string; unit: string; options: string[];
-  selected: string; onSelect: (val: string) => void; onBack: () => void
+  selected: string | null | undefined; onSelect: (val: string | null) => void; onBack: () => void
 }) {
   return (
     <div>
@@ -594,6 +657,14 @@ function BudgetRange({ title, unit, options, selected, onSelect, onBack }: {
             {opt}<span className="text-gray-400 font-normal text-sm ml-1">/ {unit}</span>
           </button>
         ))}
+        {/* Saved as null, not a string: "not sure" means no budget recorded,
+            which is what every consumer of this answer already handles. A
+            sentinel string would leak into job posts and AI context as text. */}
+        <button onClick={() => onSelect(null)}
+          className={`w-full p-4 rounded-2xl border-2 text-left font-medium transition ${selected === null ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 hover:border-gray-300 text-gray-500'}`}>
+          Not sure yet
+          <span className="block text-gray-400 font-normal text-sm mt-0.5">We can work it out with caregivers later</span>
+        </button>
       </div>
     </div>
   )
