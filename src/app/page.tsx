@@ -60,6 +60,12 @@ export default function Home() {
                 </button>
               </div>
               <p className="text-gray-400 text-sm mt-4">✓ Free to browse &nbsp; ✓ Verified caregivers &nbsp; ✓ No commitment</p>
+              <p className="text-gray-400 text-sm mt-3">
+                Prefer to start with a human?{' '}
+                <Link href="/concierge" className="text-[#4A90D9] hover:underline">
+                  Book 20 minutes with our founder →
+                </Link>
+              </p>
             </div>
 
             {/* Hero Visual */}

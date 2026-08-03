@@ -130,6 +130,11 @@ const copy = {
   disclaimerBody:
     'Ruah is not a law firm and does not give legal, tax, or employment advice. This page points you toward the official sources so you can read them yourself or take them to someone who can advise you. Where anything here differs from what the District of Columbia publishes, the District is right and we are not.',
 
+  conciergeTitle: 'Would you rather talk this through with someone?',
+  conciergeBody:
+    'Deciding who to let into your home is a lot to weigh on your own. You can book 20 minutes with our founder, walk through your family’s situation, and have your first match coordinated personally.',
+  conciergeCta: 'Book 20 minutes with our founder',
+
   reportTitle: 'Tell us when something is wrong',
   reportBody:
     'If a profile, a message, or an interaction feels wrong, report it. We read everything that comes in, and we act on anything involving safety. You do not need to be certain before you tell us.',
@@ -281,6 +286,21 @@ export default function TrustAndSafetyPage() {
           <div className="border border-line-strong rounded-card p-6">
             <h2 className="font-semibold text-ink mb-2">{copy.disclaimerTitle}</h2>
             <p className="text-sm text-ink-muted leading-relaxed">{copy.disclaimerBody}</p>
+          </div>
+        </section>
+
+        {/* Concierge — offered here because this page is where a family is
+            weighing the limits of what we check. Not offered in dashboards. */}
+        <section className="mb-16">
+          <div className="bg-brand-soft rounded-card p-7">
+            <h2 className="text-lg font-semibold text-ink mb-2">{copy.conciergeTitle}</h2>
+            <p className="text-ink-muted leading-relaxed mb-5">{copy.conciergeBody}</p>
+            <Link
+              href="/concierge"
+              className="inline-block bg-brand-gradient text-white px-6 py-3 rounded-control font-semibold"
+            >
+              {copy.conciergeCta} →
+            </Link>
           </div>
         </section>
 

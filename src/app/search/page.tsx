@@ -210,7 +210,15 @@ export default function SearchPage() {
     }
   }
 
-  const activeFilterCount = [serviceFilter, languageFilter, maxRateFilter, verifiedOnly].filter(Boolean).length
+  // Only count filters the user can see and clear. A service filter applied
+  // from the family's request stays in effect, but while its control is hidden
+  // it must not show up as an active filter with nothing to click.
+  const activeFilterCount = [
+    SERVICE_OPTIONS.length > 1 ? serviceFilter : '',
+    languageFilter,
+    maxRateFilter,
+    verifiedOnly,
+  ].filter(Boolean).length
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#FAFCFF]">
@@ -259,21 +267,25 @@ export default function SearchPage() {
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-2">Service type</label>
-            <div className="flex flex-wrap gap-2">
-              {SERVICE_OPTIONS.map(opt => (
-                <button key={opt.value} onClick={() => setServiceFilter(serviceFilter === opt.value ? '' : opt.value)}
-                  className={`px-3 py-1.5 rounded-full border text-xs transition ${
-                    serviceFilter === opt.value
-                      ? 'border-[#7FB3FF] bg-blue-50 text-[#4A90D9] font-medium'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}>
-                  {opt.label}
-                </button>
-              ))}
+          {/* A filter with one option filters nothing. Hidden while childcare
+              is the only selectable service; returns on its own at two or more. */}
+          {SERVICE_OPTIONS.length > 1 && (
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-700 mb-2">Service type</label>
+              <div className="flex flex-wrap gap-2">
+                {SERVICE_OPTIONS.map(opt => (
+                  <button key={opt.value} onClick={() => setServiceFilter(serviceFilter === opt.value ? '' : opt.value)}
+                    className={`px-3 py-1.5 rounded-full border text-xs transition ${
+                      serviceFilter === opt.value
+                        ? 'border-[#7FB3FF] bg-blue-50 text-[#4A90D9] font-medium'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="mb-4">
             <label className="block text-xs font-semibold text-gray-700 mb-2">Language</label>
