@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -376,36 +377,49 @@ Your job:
           </button>
         </div>
 
-        {/* Background Check */}
+        {/* Identity verification. This is the only check Ruah runs — there is
+            no background check product, so nothing here may imply one. */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="font-semibold text-gray-900 mb-1">Background Check</h2>
-              <p className="text-xs text-gray-400">Get verified and stand out to families</p>
+              <h2 className="font-semibold text-gray-900 mb-1">Identity verification</h2>
+              <p className="text-xs text-gray-400">Required before you can apply to requests</p>
             </div>
-            <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-              profile?.background_check_status === 'passed'
+            <span className={`shrink-0 text-xs px-3 py-1 rounded-full font-medium ${
+              profile?.is_verified
                 ? 'bg-green-100 text-green-600'
-                : 'bg-gray-100 text-gray-500'
+                : profile?.verification_status === 'pending'
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'bg-gray-100 text-gray-500'
             }`}>
-              {profile?.background_check_status === 'passed' ? '✓ Verified' : 'Not started'}
+              {profile?.is_verified
+                ? '✓ Verified'
+                : profile?.verification_status === 'pending'
+                  ? 'Under review'
+                  : profile?.verification_status === 'rejected'
+                    ? 'Needs another look'
+                    : 'Not started'}
             </span>
           </div>
-          {profile?.background_check_status !== 'passed' && (
+          {!profile?.is_verified && profile?.verification_status !== 'pending' && (
             <div className="mt-4">
               <div className="bg-[#EAF4FF] rounded-xl p-4 mb-4">
-                <div className="text-sm font-medium text-[#4A90D9] mb-2">Why get verified?</div>
+                <div className="text-sm font-medium text-[#4A90D9] mb-2">What this involves</div>
                 <ul className="text-xs text-gray-500 space-y-1">
-                  <li>✓ Get a Verified badge on your profile</li>
-                  <li>✓ Families prefer verified caregivers</li>
-                  <li>✓ Appear higher in search results</li>
-                  <li>✓ Build trust with families faster</li>
+                  <li>✓ Upload a government ID and a selfie — that is all we ask for</li>
+                  <li>✓ Someone on our team checks them by hand</li>
+                  <li>✓ Families never see your documents, only the badge</li>
+                  <li>✓ Families can filter their search to verified caregivers only</li>
                 </ul>
               </div>
-              <button className="w-full border-2 border-[#7FB3FF] text-[#7FB3FF] py-3 rounded-xl text-sm font-medium hover:bg-blue-50 transition">
-                Request Background Check (Optional)
+              <button onClick={() => router.push('/caregiver/verify')}
+                className="w-full border-2 border-[#7FB3FF] text-[#7FB3FF] py-3 rounded-xl text-sm font-medium hover:bg-blue-50 transition">
+                {profile?.verification_status === 'rejected' ? 'Re-submit your documents' : 'Start verification'}
               </button>
-              <p className="text-xs text-gray-400 text-center mt-2">This is optional. You can still use Ruah without it.</p>
+              <p className="text-xs text-gray-400 text-center mt-2">
+                Ruah does not run background checks.{' '}
+                <Link href="/trust" className="text-[#4A90D9] hover:underline">What we check →</Link>
+              </p>
             </div>
           )}
         </div>
