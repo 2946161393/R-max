@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import FamilyNav from '@/components/FamilyNav'
+import { INTERNAL_NOTIFICATION_TYPE, isActionNotification } from '@/lib/notifications'
 
 const SERVICE_LABELS: Record<string, string> = {
   childcare: '👶 Childcare',
@@ -29,8 +30,36 @@ export default function FamilyDashboard() {
   const [showAddService, setShowAddService] = useState(false)
   const [addingServices, setAddingServices] = useState(false)
   const [selectedNewServices, setSelectedNewServices] = useState<string[]>([])
+  const [approvingProposal, setApprovingProposal] = useState<string | null>(null)
+  const [proposalNotice, setProposalNotice] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  const approveProposal = async (matchId: string) => {
+    setApprovingProposal(matchId)
+    try {
+      const res = await fetch('/api/approve-proposal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setProposalNotice(data.error || 'Approval failed — try again.'); return }
+      setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status: 'pending', family_interested: true } : m))
+      setProposalNotice(data.outreach === 'sent'
+        ? `Approved — Ruah reached out to ${data.caregiver}.`
+        : `Approved. ${data.reason}`)
+    } finally {
+      setApprovingProposal(null)
+    }
+  }
+
+  const declineProposal = async (matchId: string) => {
+    await supabase.from('matches')
+      .update({ family_interested: false, status: 'declined' })
+      .eq('id', matchId)
+    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status: 'declined', family_interested: false } : m))
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -39,7 +68,7 @@ export default function FamilyDashboard() {
 
       const { data: userData } = await supabase.from('users').select('*').eq('id', authUser.id).single()
       const { data: familyData } = await supabase.from('family_profiles').select('*').eq('user_id', authUser.id).single()
-      const { data: notifData } = await supabase.from('notifications').select('*').eq('user_id', authUser.id).order('created_at', { ascending: false }).limit(10)
+      const { data: notifData } = await supabase.from('notifications').select('*').eq('user_id', authUser.id).neq('type', INTERNAL_NOTIFICATION_TYPE).order('created_at', { ascending: false }).limit(10)
 
       let requestsData: any[] = []
       if (familyData?.id) {
@@ -114,9 +143,71 @@ export default function FamilyDashboard() {
     ? matches.filter(m => m.service_requests?.service_type === activeService)
     : matches
 
-  const previewMatches = filteredMatches.slice(0, 2)
-  const previewNotifs = notifications.slice(0, 3)
+  // Action items first, then FYI, capped at 3 total for the preview.
+  const actionNotifs = notifications.filter(isActionNotification)
+  const infoNotifs = notifications.filter(n => !isActionNotification(n))
+  const previewAction = actionNotifs.slice(0, 3)
+  const previewInfo = infoNotifs.slice(0, Math.max(0, 3 - previewAction.length))
   const availableToAdd = ALL_SERVICES.filter(s => !serviceList.includes(s))
+
+  const renderNotif = (n: any) => (
+    <div key={n.id}
+      onClick={() => markAsRead(n.id)}
+      className={`flex items-start gap-3 cursor-pointer rounded-xl p-3 transition ${!n.read ? 'bg-blue-50/40' : ''}`}>
+      <div className="text-xl mt-0.5">
+        {n.type === 'new_match' ? '🎯' : n.type === 'mutual_match' ? '🎉' : n.type === 'caregiver_interested' ? '🎉' : n.type === 'message' ? '💬' : '📬'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-gray-900">{n.title}</div>
+        <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{n.body}</div>
+      </div>
+      {!n.read && <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1.5" />}
+    </div>
+  )
+
+  // Ruah's summary of the match inbox state (for dashboard preview) — derived
+  // from what the agent actually did: proposals queued for approval, deadlines
+  // recorded on matches, quiet introductions closed. Closed matches never
+  // count as "waiting on you".
+  const isOpenMatch = (m: any) => !['stalled', 'declined', 'pending_family_approval', 'hired', 'closed'].includes(m.status)
+  const openMatches = filteredMatches.filter(isOpenMatch)
+  const proposalCount = filteredMatches.filter(m => m.status === 'pending_family_approval').length
+  const needsResponseCount = openMatches.filter(m => m.family_interested === null && m.status !== 'accepted').length
+  const inProgressCount = openMatches.filter(m => m.family_interested === true && m.status !== 'accepted').length
+  const matchedCount = openMatches.filter(m => m.status === 'accepted').length
+  const closedRecently = notifications.filter(n =>
+    n.type === 'match_closed' && Date.now() - new Date(n.created_at).getTime() < 7 * 86400_000
+  ).length
+  const nextDeadlineTs = openMatches
+    .map(m => (m.expires_at ? new Date(m.expires_at).getTime() : 0))
+    .filter(t => t > Date.now())
+    .sort((a, b) => a - b)[0]
+  const nextDeadline = nextDeadlineTs
+    ? new Date(nextDeadlineTs).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : null
+
+  const summarySentences: string[] = []
+  if (proposalCount > 0) {
+    summarySentences.push(`I found ${proposalCount} new caregiver${proposalCount > 1 ? 's' : ''} for you — approve before anyone is contacted.`)
+  }
+  if (needsResponseCount > 0) {
+    summarySentences.push(`${needsResponseCount} caregiver${needsResponseCount > 1 ? 's are' : ' is'} waiting for your response.`)
+  }
+  if (matchedCount > 0) {
+    summarySentences.push(`You have ${matchedCount} active match${matchedCount > 1 ? 'es' : ''} 🎉`)
+  }
+  if (inProgressCount > 0) {
+    summarySentences.push(nextDeadline
+      ? `I've reached out to ${inProgressCount} caregiver${inProgressCount > 1 ? 's' : ''} and will update you by ${nextDeadline} either way.`
+      : `I've reached out to ${inProgressCount} caregiver${inProgressCount > 1 ? 's' : ''} — waiting to hear back.`)
+  } else if (nextDeadline) {
+    summarySentences.push(`I'll update you by ${nextDeadline} either way.`)
+  }
+  if (closedRecently > 0) {
+    summarySentences.push(`${closedRecently} quiet introduction${closedRecently > 1 ? 's were' : ' was'} closed this week so you're not left waiting.`)
+  }
+  const matchesSummary = summarySentences.slice(0, 2).join(' ') ||
+    `I'm keeping an eye out for great caregivers for your family.`
 
   return (
     <div className="min-h-screen bg-[#FAFCFF]">
@@ -198,21 +289,64 @@ export default function FamilyDashboard() {
           </div>
         )}
 
-        {/* My Matches preview */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-gray-900">My Matches</h2>
-              {filteredMatches.filter(m => m.family_interested === null && (m.status === 'admin_matched' || m.status === 'pending')).length > 0 && (
-                <span className="bg-[#7FB3FF] text-white text-xs px-2 py-0.5 rounded-full">
-                  {filteredMatches.filter(m => m.family_interested === null && (m.status === 'admin_matched' || m.status === 'pending')).length} new
-                </span>
+        {/* Ruah proposals — first-class NEEDS-YOU card, nobody contacted until approved */}
+        {(() => {
+          const proposalMatches = matches.filter(m => m.status === 'pending_family_approval')
+          if (proposalMatches.length === 0 && !proposalNotice) return null
+          const p = proposalMatches[0]
+          const pName = p?.caregiver_profiles?.users?.full_name || 'A caregiver'
+          const pReason = p ? String(p.ai_reasoning || '').replace(/^\[agent-proposed\]\s*/, '') : ''
+          return (
+            <div className="bg-white rounded-2xl border border-amber-300 p-5 mb-4">
+              {proposalNotice && (
+                <div className="flex items-start justify-between gap-3 bg-[#EAF4FF] rounded-xl px-3 py-2 mb-3">
+                  <p className="text-xs text-gray-700">{proposalNotice}</p>
+                  <button onClick={() => setProposalNotice(null)} className="text-gray-400 text-xs leading-none">✕</button>
+                </div>
+              )}
+              {p && (
+                <>
+                  <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-white rounded-full px-2.5 py-1 mb-2 bg-[#B45309]">
+                    Needs you
+                  </span>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {pName} — proposed for your {p.service_requests?.service_type || 'care'} request
+                  </div>
+                  {pReason && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{pReason}</p>}
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => approveProposal(p.id)}
+                      disabled={approvingProposal === p.id}
+                      className="flex-1 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-60"
+                      style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                      {approvingProposal === p.id ? 'Approving…' : 'Approve — Ruah reaches out'}
+                    </button>
+                    <button
+                      onClick={() => declineProposal(p.id)}
+                      className="px-4 py-2 rounded-xl text-xs font-medium border border-gray-200 text-gray-500 hover:border-red-200 hover:text-red-400 transition">
+                      Not now
+                    </button>
+                  </div>
+                  {proposalMatches.length > 1 && (
+                    <button onClick={() => router.push('/family/matches')}
+                      className="w-full mt-2 text-xs text-[#4A90D9] hover:underline text-center">
+                      +{proposalMatches.length - 1} more proposal{proposalMatches.length > 2 ? 's' : ''} →
+                    </button>
+                  )}
+                </>
               )}
             </div>
-            {filteredMatches.length > 2 && (
-              <button onClick={() => router.push('/family/matches')} className="text-sm text-[#7FB3FF] hover:underline">
-                See all {filteredMatches.length} →
-              </button>
+          )
+        })()}
+
+        {/* My Matches preview — Ruah summarizes, details live in the inbox */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">My Matches</h2>
+            {needsResponseCount > 0 && (
+              <span className="bg-[#7FB3FF] text-white text-xs px-2 py-0.5 rounded-full">
+                {needsResponseCount} need{needsResponseCount > 1 ? '' : 's'} you
+              </span>
             )}
           </div>
 
@@ -220,64 +354,22 @@ export default function FamilyDashboard() {
             <div className="text-center py-8 text-gray-400">
               <div className="text-3xl mb-2">🎯</div>
               <p className="text-sm">No matches yet.</p>
-              <p className="text-xs mt-1 text-gray-300">Post a request and we'll find you the best caregivers!</p>
+              <p className="text-xs mt-1 text-gray-300">Ask Ruah to find caregivers, or post a request to get started!</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {previewMatches.map(m => {
-                const cp = m.caregiver_profiles
-                const caregiverUser = cp?.users
-                const isMutual = m.status === 'accepted'
-                const familyAccepted = m.family_interested === true
-
-                return (
-                  <div key={m.id} className={`rounded-xl border p-4 transition ${
-                    isMutual ? 'border-green-200 bg-green-50/20'
-                    : familyAccepted ? 'border-yellow-200 bg-yellow-50/20'
-                    : m.family_interested === false ? 'border-gray-100 opacity-50'
-                    : 'border-[#7FB3FF]/40 bg-blue-50/20'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      {caregiverUser?.avatar_url
-                        ? <img src={caregiverUser.avatar_url} className="w-10 h-10 rounded-full object-cover flex-shrink-0" alt="" />
-                        : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold flex-shrink-0">
-                            {caregiverUser?.full_name?.[0]?.toUpperCase() || '?'}
-                          </div>
-                      }
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-gray-900 text-sm">{caregiverUser?.full_name || 'Caregiver'}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            isMutual ? 'bg-green-100 text-green-600'
-                            : familyAccepted ? 'bg-yellow-100 text-yellow-600'
-                            : m.family_interested === false ? 'bg-gray-100 text-gray-500'
-                            : 'bg-blue-100 text-blue-500'
-                          }`}>
-                            {isMutual ? '🎉 Matched!' : familyAccepted ? '⏳ Waiting' : m.family_interested === false ? 'Passed' : '✨ New'}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-x-2 mt-0.5">
-                          {cp?.services?.length > 0 && <span className="text-xs text-gray-500">{cp.services.join(', ')}</span>}
-                          {cp?.hourly_rate_min && cp?.hourly_rate_max && <span className="text-xs text-gray-400">· ${cp.hourly_rate_min}–${cp.hourly_rate_max}/hr</span>}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => router.push('/family/matches')}
-                        className="text-xs text-[#7FB3FF] hover:underline flex-shrink-0">
-                        {isMutual ? '💬 Chat' : 'View'}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-              {filteredMatches.length > 2 && (
-                <button
-                  onClick={() => router.push('/family/matches')}
-                  className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-sm text-gray-400 hover:border-[#7FB3FF] hover:text-[#7FB3FF] transition">
-                  + {filteredMatches.length - 2} more matches →
-                </button>
-              )}
-            </div>
+            <>
+              {/* Ruah's one-line summary of the inbox state */}
+              <div className="flex items-start gap-3 bg-gradient-to-r from-[#EAF4FF] to-[#FFF6F2] rounded-xl px-4 py-3 mb-4">
+                <img src="/ruah-logo.png" alt="Ruah" className="w-6 h-6 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-700 leading-snug">{matchesSummary}</p>
+              </div>
+              <button
+                onClick={() => router.push('/family/matches')}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition"
+                style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
+                View all matches →
+              </button>
+            </>
           )}
         </div>
 
@@ -323,7 +415,7 @@ export default function FamilyDashboard() {
         </div>
 
         {/* Recent Activity */}
-        {previewNotifs.length > 0 && (
+        {(previewAction.length > 0 || previewInfo.length > 0) && (
           <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Recent Activity</h2>
@@ -334,20 +426,18 @@ export default function FamilyDashboard() {
               )}
             </div>
             <div className="space-y-3">
-              {previewNotifs.map(n => (
-                <div key={n.id}
-                  onClick={() => markAsRead(n.id)}
-                  className={`flex items-start gap-3 cursor-pointer rounded-xl p-3 transition ${!n.read ? 'bg-blue-50/40' : ''}`}>
-                  <div className="text-xl mt-0.5">
-                    {n.type === 'new_match' ? '🎯' : n.type === 'mutual_match' ? '🎉' : n.type === 'caregiver_interested' ? '🎉' : n.type === 'message' ? '💬' : '📬'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900">{n.title}</div>
-                    <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{n.body}</div>
-                  </div>
-                  {!n.read && <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1.5" />}
-                </div>
-              ))}
+              {previewAction.length > 0 && (
+                <>
+                  <p className="text-[11px] font-semibold text-[#4A90D9] uppercase tracking-wide">Needs your action</p>
+                  {previewAction.map(renderNotif)}
+                </>
+              )}
+              {previewInfo.length > 0 && (
+                <>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">For your information</p>
+                  {previewInfo.map(renderNotif)}
+                </>
+              )}
             </div>
           </div>
         )}

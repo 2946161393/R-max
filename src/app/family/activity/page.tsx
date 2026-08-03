@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import FamilyNav from '@/components/FamilyNav'
+import { INTERNAL_NOTIFICATION_TYPE, isActionNotification } from '@/lib/notifications'
 
 export default function FamilyActivityPage() {
   const [user, setUser] = useState<any>(null)
@@ -23,6 +24,7 @@ export default function FamilyActivityPage() {
         .from('notifications')
         .select('*')
         .eq('user_id', authUser.id)
+        .neq('type', INTERNAL_NOTIFICATION_TYPE)
         .order('created_at', { ascending: false })
 
       setUser(userData)
@@ -52,7 +54,11 @@ export default function FamilyActivityPage() {
   )
 
   const unread = notifications.filter(n => !n.read)
-  const read = notifications.filter(n => n.read)
+  // Primary split: what needs doing vs. what is just news — action first,
+  // unread first within each group.
+  const unreadFirst = (a: any, b: any) => Number(a.read) - Number(b.read)
+  const actionItems = notifications.filter(isActionNotification).sort(unreadFirst)
+  const infoItems = notifications.filter(n => !isActionNotification(n)).sort(unreadFirst)
 
   return (
     <div className="min-h-screen bg-[#FAFCFF]">
@@ -84,10 +90,10 @@ export default function FamilyActivityPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {unread.length > 0 && (
+            {actionItems.length > 0 && (
               <>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">New</p>
-                {unread.map(n => (
+                <p className="text-xs font-semibold text-[#4A90D9] uppercase tracking-wide mb-2">Needs your action</p>
+                {actionItems.map(n => (
                   <div key={n.id}
                     onClick={() => markAsRead(n.id)}
                     className="bg-white rounded-2xl border border-[#7FB3FF]/30 bg-blue-50/20 p-4 cursor-pointer hover:shadow-sm transition">
@@ -106,7 +112,7 @@ export default function FamilyActivityPage() {
                           {new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
-                      <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1" />
+                      {!n.read && <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1" />}
                     </div>
                     {n.type === 'new_match' && n.data?.caregiverUserId && (
                       <button
@@ -137,12 +143,13 @@ export default function FamilyActivityPage() {
               </>
             )}
 
-            {read.length > 0 && (
+            {infoItems.length > 0 && (
               <>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">Earlier</p>
-                {read.map(n => (
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">For your information</p>
+                {infoItems.map(n => (
                   <div key={n.id}
-                    className="bg-white rounded-2xl border border-gray-100 p-4 hover:shadow-sm transition">
+                    onClick={() => markAsRead(n.id)}
+                    className="bg-white rounded-2xl border border-gray-100 p-4 cursor-pointer hover:shadow-sm transition">
                     <div className="flex items-start gap-3">
                       <div className="text-xl mt-0.5 opacity-50">
                         {n.type === 'new_match' ? '🎯'
@@ -158,6 +165,7 @@ export default function FamilyActivityPage() {
                           {new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
+                      {!n.read && <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1" />}
                     </div>
                   </div>
                 ))}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { isRuahMessage, ruahMessageVisibleTo } from '@/lib/messages'
 
 export default function MessagesPage() {
   const [user, setUser] = useState<any>(null)
@@ -24,16 +25,21 @@ export default function MessagesPage() {
       const { data: messages } = await supabase
         .from('messages')
         .select(`
-          id, content, created_at, read_at, sender_id, receiver_id,
+          id, content, created_at, read_at, sender_id, receiver_id, sender_type, is_ai,
           sender:users!messages_sender_id_fkey ( id, full_name, avatar_url, role ),
           receiver:users!messages_receiver_id_fkey ( id, full_name, avatar_url, role )
         `)
         .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`)
         .order('created_at', { ascending: false })
 
+      // Audience filter: Ruah's reports to the other party never appear here,
+      // not even as a preview line.
+      const viewer = { id: authUser.id, role: userData?.role }
+      const visible = (messages || []).filter(m => ruahMessageVisibleTo(m, viewer))
+
       // Group by conversation partner
       const convMap = new Map<string, any>()
-      for (const msg of messages || []) {
+      for (const msg of visible) {
         const partner: any = msg.sender_id === authUser.id ? msg.receiver : msg.sender
         if (!partner) continue
         const partnerId = partner.id
@@ -132,7 +138,7 @@ export default function MessagesPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <p className={`text-xs truncate ${isUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
-                        {last.sender_id === user?.id ? 'You: ' : ''}{last.content}
+                        {isRuahMessage(last) ? 'Ruah: ' : last.sender_id === user?.id ? 'You: ' : ''}{last.content}
                       </p>
                       {conv.unreadCount > 0 && (
                         <span className="ml-2 bg-[#7FB3FF] text-white text-xs font-bold min-w-5 h-5 rounded-full flex items-center justify-center px-1 flex-shrink-0">

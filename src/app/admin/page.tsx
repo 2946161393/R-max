@@ -17,6 +17,7 @@ export default function AdminOverview() {
     flaggedContent: 0,
   })
   const [recentUsers, setRecentUsers] = useState<any[]>([])
+  const [escalations, setEscalations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
@@ -65,6 +66,22 @@ export default function AdminOverview() {
         pendingVerifications: pendingVerif?.length || 0,
         flaggedContent: flaggedCount,
       })
+      // Agent escalations — internal ops messages, surfaced only here.
+      // One row is inserted per admin user, so dedupe identical title+body.
+      const { data: escalationData } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('type', 'admin_escalation')
+        .order('created_at', { ascending: false })
+        .limit(20)
+      const seen = new Set<string>()
+      setEscalations((escalationData || []).filter(e => {
+        const key = `${e.title}|${e.body}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      }))
+
       setRecentUsers(users?.slice(0, 5) || [])
       setLoading(false)
     }
@@ -79,6 +96,15 @@ export default function AdminOverview() {
 
   // Build the action items list — only things that need attention
   const actionItems = [
+    {
+      show: escalations.length > 0,
+      count: escalations.length,
+      icon: '🤖',
+      title: `${escalations.length} agent escalation${escalations.length > 1 ? 's' : ''}`,
+      desc: escalations[0]?.title || 'The follow-up agent flagged something for a human',
+      path: '/admin/matching',
+      accent: 'purple',
+    },
     {
       show: stats.pendingVerifications > 0,
       count: stats.pendingVerifications,
@@ -102,10 +128,12 @@ export default function AdminOverview() {
   const accentClasses: Record<string, string> = {
     amber: 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/60',
     red: 'bg-red-500/10 border-red-500/30 hover:border-red-500/60',
+    purple: 'bg-purple-500/10 border-purple-500/30 hover:border-purple-500/60',
   }
   const accentText: Record<string, string> = {
     amber: 'text-amber-300',
     red: 'text-red-300',
+    purple: 'text-purple-300',
   }
 
   return (
@@ -145,6 +173,29 @@ export default function AdminOverview() {
           </div>
         )}
       </div>
+
+      {/* Agent escalations — full text, internal ops only */}
+      {escalations.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Agent escalations</h2>
+          <div className="space-y-3">
+            {escalations.map(e => (
+              <div key={e.id} className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-5">
+                <div className="flex items-start gap-4">
+                  <span className="text-2xl">🤖</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-purple-300">{e.title}</div>
+                    <p className="text-sm text-gray-400 mt-1 leading-relaxed whitespace-pre-wrap">{e.body}</p>
+                    <p className="text-xs text-gray-600 mt-2">
+                      {new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-4 gap-4 mb-8">

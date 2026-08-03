@@ -3,11 +3,15 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
+import RequestSummaryCard from '@/components/RequestSummaryCard'
+import { isRuahMessage, ruahMessageVisibleTo } from '@/lib/messages'
 
 export default function ChatPage() {
   const [user, setUser] = useState<any>(null)
   const [partner, setPartner] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
+  // match_id -> { request, childrenAges, city } for structured request cards
+  const [requestByMatch, setRequestByMatch] = useState<Record<string, any>>({})
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -41,6 +45,27 @@ export default function ChatPage() {
         .order('created_at', { ascending: true })
 
       setMessages(msgs || [])
+
+      // Load the service request behind each match referenced in this thread,
+      // so outreach shows as a structured card instead of prose alone.
+      const matchIds = [...new Set((msgs || []).map(m => m.match_id).filter(Boolean))]
+      if (matchIds.length > 0) {
+        const { data: matchRows } = await supabase
+          .from('matches')
+          .select('id, service_requests(*, family_profiles(children_ages, users(city)))')
+          .in('id', matchIds)
+        const map: Record<string, any> = {}
+        for (const row of matchRows || []) {
+          const req = (row as any).service_requests
+          if (!req) continue
+          map[(row as any).id] = {
+            request: req,
+            childrenAges: req.family_profiles?.children_ages || null,
+            city: req.family_profiles?.users?.city || null,
+          }
+        }
+        setRequestByMatch(map)
+      }
 
       // Mark messages as read
       await supabase
@@ -146,7 +171,24 @@ export default function ChatPage() {
     </div>
   )
 
-  const messageGroups = groupMessages(messages)
+  // Audience filter: Ruah's reports to one party never render for the other.
+  const visibleMessages = messages.filter(m => ruahMessageVisibleTo(m, user))
+  const messageGroups = groupMessages(visibleMessages)
+
+  // Attach each match's request card to the FIRST Ruah message that carries it.
+  const isRuahMsg = isRuahMessage
+  const firstRuahForMatch: Record<string, string> = {}
+  for (const m of visibleMessages) {
+    if (isRuahMsg(m) && m.match_id && !firstRuahForMatch[m.match_id]) {
+      firstRuahForMatch[m.match_id] = m.id
+    }
+  }
+
+  const ruahLabel = (msg: any) => {
+    if (msg.receiver_id === user?.id) return 'Ruah'
+    if (user?.role === 'family') return 'Ruah · sent on your behalf'
+    return `Ruah · on behalf of ${partner?.full_name?.split(' ')[0] || 'the family'}`
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFCFF] flex flex-col">
@@ -179,7 +221,7 @@ export default function ChatPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        {messages.length === 0 ? (
+        {visibleMessages.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <div className="text-3xl mb-2">👋</div>
             <p className="text-sm">Start the conversation!</p>
@@ -201,6 +243,40 @@ export default function ChatPage() {
                   const prevMsg = group.messages[i - 1]
                   const showTime = !prevMsg ||
                     new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() > 5 * 60 * 1000
+
+                  // Ruah speaks as itself — never as either party's bubble.
+                  if (isRuahMsg(msg)) {
+                    const card = msg.match_id && firstRuahForMatch[msg.match_id] === msg.id
+                      ? requestByMatch[msg.match_id]
+                      : null
+                    return (
+                      <div key={msg.id} className="flex justify-center my-3">
+                        <div className="w-full max-w-[88%] space-y-2">
+                          {showTime && (
+                            <div className="text-xs text-gray-400 text-center">
+                              {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          )}
+                          <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-[#EAF4FF] to-[#FFF6F2] px-4 py-3">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <img src="/ruah-logo.png" alt="" className="w-4 h-4" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A90D9]">
+                                {ruahLabel(msg)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                          {card && (
+                            <RequestSummaryCard
+                              request={card.request}
+                              childrenAges={card.childrenAges}
+                              city={card.city}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
 
                   return (
                     <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>

@@ -17,7 +17,8 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
   request: any; onClose: () => void; onReopen: () => void; onDelete: () => void; onViewApplications: () => void; onEdit: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const applicationCount = r.applications?.length || 0
+  // Count caregiver-initiated matches (i.e. caregivers who applied to this request)
+  const applicationCount = (r.matches || []).filter((m: any) => m.initiated_by === 'caregiver').length
   const isOpen = r.status === 'open'
   const scheduleDays = r.schedule_days || {}
   const sortedDays = DAY_ORDER.filter(d => scheduleDays[d])
@@ -56,7 +57,7 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
               {applicationCount > 0 && (
                 <div className="flex items-center gap-1.5 text-[#7FB3FF]">
                   <span>📩</span>
-                  <span className="font-medium">{applicationCount} applicant{applicationCount > 1 ? 's' : ''}</span>
+                  <span className="font-medium">{applicationCount} interested</span>
                 </div>
               )}
               <div className="flex items-center gap-1.5 text-gray-400 text-xs">
@@ -110,7 +111,7 @@ function RequestCard({ request: r, onClose, onReopen, onDelete, onViewApplicatio
             <button onClick={onViewApplications}
               className="flex-1 py-2 rounded-xl text-xs font-semibold text-white min-w-[100px]"
               style={{ background: 'linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%)' }}>
-              📩 View Applications
+              📩 View Matches
             </button>
           )}
           <button onClick={onEdit}
@@ -154,13 +155,13 @@ export default function FamilyRequestsPage() {
 
       const { data: userData } = await supabase.from('users').select('*').eq('id', authUser.id).single()
       const { data: familyData } = await supabase.from('family_profiles').select('*').eq('user_id', authUser.id).single()
-      const { data: notifData } = await supabase.from('notifications').select('id, read').eq('user_id', authUser.id)
+      const { data: notifData } = await supabase.from('notifications').select('id, read').eq('user_id', authUser.id).neq('type', 'admin_escalation')
 
       let requestsData: any[] = []
       if (familyData?.id) {
         const { data } = await supabase
           .from('service_requests')
-          .select('*, applications(id, status)')
+          .select('*, matches(id, status, initiated_by)')
           .eq('family_id', familyData.id)
           .order('created_at', { ascending: false })
         requestsData = data || []
@@ -243,7 +244,7 @@ export default function FamilyRequestsPage() {
                 onClose={() => closeRequest(r.id)}
                 onReopen={() => reopenRequest(r.id)}
                 onDelete={() => deleteRequest(r.id)}
-                onViewApplications={() => router.push(`/family/applications?request=${r.id}`)}
+                onViewApplications={() => router.push('/family/matches')}
                 onEdit={() => router.push(`/family/post?edit=${r.id}`)}
               />
             ))}

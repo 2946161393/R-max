@@ -21,6 +21,7 @@ export default function CaregiverActivityPage() {
         .from('notifications')
         .select('*')
         .eq('user_id', authUser.id)
+        .neq('type', 'admin_escalation') // internal ops — admin surfaces only
         .order('created_at', { ascending: false })
 
       setUser(userData)

@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   // 2. 获取 family profile 和 caregiver profile
   const { data: familyProfile } = await supabase
     .from('family_profiles')
-    .select('id')
+    .select('id, onboarding_answers')
     .eq('user_id', familyUserId)
     .single()
 
@@ -44,14 +44,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Profile not found' }, { status: 400 })
   }
 
-  // 3. 创建 service_request
+  // 3. 创建 service_request — carry the family's structured onboarding data
+  // onto the request so the caregiver-side request card has real fields to
+  // show, not prose alone.
+  const answers = (familyProfile as any).onboarding_answers || {}
+  const budgetMatch = String(answers.childcare_budget || '').match(/(\d+)\D+(\d+)/)
   const { data: requestData } = await supabase
     .from('service_requests')
     .insert({
       family_id: familyProfile.id,
-      service_type: 'manual',
+      service_type: answers.services?.[0] || 'childcare',
       status: 'open',
-      ai_job_post: familyNeeds
+      ai_job_post: familyNeeds,
+      languages: answers.languages?.length ? answers.languages : null,
+      pay_min: budgetMatch ? parseInt(budgetMatch[1], 10) : null,
+      pay_max: budgetMatch ? parseInt(budgetMatch[2], 10) : null,
+      extra_details: familyNeeds || null,
     })
     .select()
     .single()
@@ -76,6 +84,20 @@ export async function POST(request: NextRequest) {
     .single()
 
   const matchId = matchData?.id
+
+  // 4b. 把 outreach 写成真正的消息 — thread 里可见,family 能看到 Ruah
+  // 替他们说了什么 (visibility principle)。sender 是 family 的 user id,
+  // sender_type='ruah' 让 UI 以 Ruah 的身份渲染。
+  if (matchId) {
+    await supabase.from('messages').insert({
+      match_id: matchId,
+      sender_id: familyUserId,
+      receiver_id: caregiverUserId,
+      content: message,
+      is_ai: true,
+      sender_type: 'ruah',
+    })
+  }
 
   // 5. 给 caregiver 发通知 — 跟 admin match 完全一样
   await supabase.from('notifications').insert({

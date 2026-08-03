@@ -12,6 +12,58 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ── Ruah design tokens (design overhaul, scope 1) ─────────────────────
+   Extracted from the current ad-hoc values. Semantic names: when the
+   founder picks the launch palette, the values in THIS block change and
+   nothing else. Pages adopt these classes in scope items 2+ — defining
+   them changes no rendered pixel today.
+
+   Known AA failures carried over verbatim (fixed by the palette pick,
+   not silently): brand #7FB3FF is 2.14:1 as text on white AND under
+   white button text; brand-strong #4A90D9 is 3.34:1 as small text.   */
+@theme {
+  /* brand */
+  --color-brand: #7FB3FF;        /* primary action + identity (current) */
+  --color-brand-strong: #4A90D9; /* link/text blue (current)            */
+  --color-brand-soft: #EAF4FF;   /* tint backgrounds                    */
+  --color-brand-wash: #FAFCFF;   /* page background                     */
+  --color-accent: #A78BFA;       /* purple gradient partner — slated for
+                                    consolidation to ONE gradient family */
+  --color-warm: #FFF6F2;         /* warm end of the Ruah summary strip  */
+
+  /* ink (text ramp) */
+  --color-ink: #111827;
+  --color-ink-muted: #6B7280;
+  --color-ink-faint: #9CA3AF;
+
+  /* surfaces & hairlines */
+  --color-surface: #FFFFFF;
+  --color-line: #F3F4F6;
+  --color-line-strong: #E5E7EB;
+
+  /* semantic */
+  --color-positive: #059669;
+  --color-warning: #B45309;
+  --color-danger: #DC2626;
+
+  /* radii — two tiers (cards vs controls); pills use rounded-full */
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+
+  /* shadows — the only two in use */
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-brand: 0 8px 32px rgb(127 179 255 / 0.30);
+}
+
+/* The one sanctioned gradient (59 inline copies today become this). */
+:root {
+  --gradient-brand: linear-gradient(135deg, #7FB3FF 0%, #A78BFA 100%);
+}
+
+@utility bg-brand-gradient {
+  background-image: var(--gradient-brand);
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

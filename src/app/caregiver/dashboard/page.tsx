@@ -3,14 +3,30 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import RequestSummaryCard from '@/components/RequestSummaryCard'
+import { ADMIN_EMAILS } from '@/lib/admin/emails'
+
+// One-tap Pass reasons. "Not my service" is deliberately absent: if that's why
+// she'd pass, the MATCH was wrong — detected objectively below and logged as a
+// matching-layer signal instead of asked as a question.
+const PASS_REASONS = [
+  { value: 'schedule', label: 'Schedule conflict' },
+  { value: 'distance', label: 'Too far' },
+  { value: 'rate', label: 'Rate' },
+  { value: 'not_taking_new_families', label: 'Not taking new families right now' },
+]
 
 export default function CaregiverDashboard() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [notifications, setNotifications] = useState<any[]>([])
+  // match_id -> { request, childrenAges, city } for outreach cards
+  const [requestByMatch, setRequestByMatch] = useState<Record<string, any>>({})
   const [applications, setApplications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showTooltip, setShowTooltip] = useState(true)
+  // Notification id whose Pass-reason chips are open
+  const [passingNotif, setPassingNotif] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -27,6 +43,7 @@ export default function CaregiverDashboard() {
         .from('notifications')
         .select('*')
         .eq('user_id', authUser.id)
+        .neq('type', 'admin_escalation') // internal ops — admin surfaces only
         .order('created_at', { ascending: false })
         .limit(10)
 
@@ -61,6 +78,31 @@ export default function CaregiverDashboard() {
         await supabase.from('caregiver_profiles')
           .update({ last_active_at: new Date().toISOString() })
           .eq('user_id', authUser.id)
+      }
+
+      // Structured request data for outreach notifications — the caregiver
+      // evaluates a card with schedule/pay/location/ages, not prose alone.
+      const outreachMatchIds = [...new Set(
+        (notifData || [])
+          .filter((n: any) => n.type === 'new_match' && n.data?.matchId)
+          .map((n: any) => n.data.matchId)
+      )]
+      if (outreachMatchIds.length > 0) {
+        const { data: matchRows } = await supabase
+          .from('matches')
+          .select('id, service_requests(*, family_profiles(children_ages, users(city)))')
+          .in('id', outreachMatchIds)
+        const map: Record<string, any> = {}
+        for (const row of matchRows || []) {
+          const req = (row as any).service_requests
+          if (!req) continue
+          map[(row as any).id] = {
+            request: req,
+            childrenAges: req.family_profiles?.children_ages || null,
+            city: req.family_profiles?.users?.city || null,
+          }
+        }
+        setRequestByMatch(map)
       }
 
       setUser(userData)
@@ -118,11 +160,65 @@ export default function CaregiverDashboard() {
           return
         }
       }
-    } else {
-      await supabase.from('caregiver_profiles')
-        .update({ match_no_response_count: (profile?.match_no_response_count || 0) + 1 })
-        .eq('user_id', user.id)
     }
+    await markAsRead(n.id)
+    setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, read: true } : notif))
+  }
+
+  // One-tap Pass: immediately releases the match (declined), tells the family
+  // with the reason, and — when the request's service isn't one she offers —
+  // logs a matching-layer signal for admins. An explicit "no" is the behavior
+  // we WANT from caregivers; it never counts against her.
+  const submitPass = async (n: any, reason: string | null) => {
+    const matchId = n.data?.matchId
+    if (!matchId) return
+    setPassingNotif(null)
+
+    // decline_reason column ships in a separate migration — degrade gracefully
+    // if it hasn't been applied yet.
+    const { error } = await supabase.from('matches')
+      .update({ caregiver_interested: false, status: 'declined', decline_reason: reason })
+      .eq('id', matchId)
+    if (error) {
+      await supabase.from('matches')
+        .update({ caregiver_interested: false, status: 'declined' })
+        .eq('id', matchId)
+    }
+
+    const { data: matchData } = await supabase
+      .from('matches')
+      .select('id, service_requests(service_type, family_profiles(user_id))')
+      .eq('id', matchId)
+      .single()
+    const sr = (matchData as any)?.service_requests
+    const familyUserId = sr?.family_profiles?.user_id
+    const serviceType = sr?.service_type
+    const reasonLabel = PASS_REASONS.find(r => r.value === reason)?.label
+
+    if (familyUserId) {
+      await supabase.from('notifications').insert({
+        user_id: familyUserId,
+        type: 'match_declined',
+        title: `${user.full_name || 'The caregiver'} passed on your ${serviceType || 'care'} request`,
+        body: `${reasonLabel ? `Reason: ${reasonLabel.toLowerCase()}. ` : ''}Ruah will look for alternatives for you.`,
+        data: { matchId, isAi: true },
+      })
+    }
+
+    // Matching-layer signal: she was routed a service she doesn't offer.
+    if (serviceType && profile?.services?.length && !profile.services.includes(serviceType)) {
+      const { data: admins } = await supabase.from('users').select('id').in('email', ADMIN_EMAILS)
+      if (admins?.length) {
+        await supabase.from('notifications').insert(admins.map((a: any) => ({
+          user_id: a.id,
+          type: 'admin_escalation',
+          title: 'Matching signal: service mismatch',
+          body: `${user.full_name || 'A caregiver'} (services: ${profile.services.join(', ')}) was routed a ${serviceType} request and passed. Match ${matchId}.`,
+          data: { matchId },
+        })))
+      }
+    }
+
     await markAsRead(n.id)
     setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, read: true } : notif))
   }
@@ -140,8 +236,8 @@ export default function CaregiverDashboard() {
 
   // Derive a display status from the unified match fields
   const displayStatus = (a: any) => {
-    if (a.status === 'accepted') return 'accepted'
-    if (a.status === 'declined' || a.family_interested === false) return 'declined'
+    if (a.status === 'accepted' || a.status === 'hired') return 'accepted'
+    if (a.status === 'declined' || a.status === 'closed' || a.family_interested === false) return 'declined'
     return 'pending'
   }
 
@@ -312,6 +408,15 @@ export default function CaregiverDashboard() {
                     {!n.read && <div className="w-2 h-2 bg-[#7FB3FF] rounded-full flex-shrink-0 mt-1.5" />}
                   </div>
 
+                  {n.type === 'new_match' && n.data?.matchId && requestByMatch[n.data.matchId] && (
+                    <div className="mt-2">
+                      <RequestSummaryCard
+                        request={requestByMatch[n.data.matchId].request}
+                        childrenAges={requestByMatch[n.data.matchId].childrenAges}
+                        city={requestByMatch[n.data.matchId].city}
+                      />
+                    </div>
+                  )}
                   {n.type === 'new_match' && n.data?.matchId && (
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => handleMatchInterest(n, true)}
@@ -323,10 +428,29 @@ export default function CaregiverDashboard() {
                         className="flex-1 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600">
                         View post
                       </button>
-                      <button onClick={() => handleMatchInterest(n, false)}
+                      <button onClick={() => setPassingNotif(passingNotif === n.id ? null : n.id)}
                         className="px-3 py-1.5 rounded-lg text-xs border border-gray-100 text-gray-400 hover:border-red-200 hover:text-red-400">
                         Pass
                       </button>
+                    </div>
+                  )}
+                  {n.type === 'new_match' && n.data?.matchId && passingNotif === n.id && (
+                    <div className="mt-2 bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-500 mb-2">No problem — mind sharing why? (optional)</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PASS_REASONS.map(r => (
+                          <button key={r.value}
+                            onClick={() => submitPass(n, r.value)}
+                            className="px-3 py-1.5 rounded-full text-xs border border-gray-200 text-gray-600 bg-white hover:border-[#7FB3FF] hover:text-[#4A90D9] transition">
+                            {r.label}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => submitPass(n, null)}
+                          className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-gray-600 transition">
+                          Skip
+                        </button>
+                      </div>
                     </div>
                   )}
                   {n.type === 'mutual_match' && n.data?.familyUserId && (
