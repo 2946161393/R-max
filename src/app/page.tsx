@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
@@ -200,9 +201,9 @@ export default function Home() {
           </div>
           <div className="text-gray-400 text-sm">© 2025 Ruah! All rights reserved.</div>
           <div className="flex gap-6 text-sm text-gray-400">
-            <span className="hover:text-gray-600 cursor-pointer">Privacy</span>
-            <span className="hover:text-gray-600 cursor-pointer">Terms</span>
-            <span className="hover:text-gray-600 cursor-pointer">Contact</span>
+            <Link href="/privacy" className="hover:text-gray-600">Privacy</Link>
+            <Link href="/terms" className="hover:text-gray-600">Terms</Link>
+            <a href="mailto:zijinwang168@gmail.com" className="hover:text-gray-600">Contact</a>
           </div>
         </div>
       </footer>
