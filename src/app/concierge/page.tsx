@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import CalEmbed from './CalEmbed'
+import ContactEmail from '@/components/ContactEmail'
 
 /* Ruah Team concierge booking.
 
@@ -45,8 +46,6 @@ const calLink = CAL_BOOKING_URL
   ? new URL(CAL_BOOKING_URL).pathname.replace(/^\/+/, '')
   : null
 
-const CONTACT_EMAIL = 'hello@ruahruah.com'
-
 const copy = {
   eyebrow: 'Concierge',
   title: 'Prefer to start with a human?',
@@ -83,6 +82,8 @@ const copy = {
   placeholderBody:
     'The scheduling link is being set up. In the meantime, email us directly and you will get the same 30 minutes.',
   placeholderCta: 'Email the Ruah Team',
+  placeholderSubject: 'Booking 30 minutes with Ruah',
+  emailUsLabel: 'Or email us',
   placeholderDevNote:
     'Developer note: set CAL_BOOKING_URL in src/app/concierge/page.tsx to replace this block with the live booking embed.',
 
@@ -158,12 +159,11 @@ export default function ConciergePage() {
               <p className="text-sm text-ink-muted leading-relaxed max-w-md mx-auto mb-6">
                 {copy.placeholderBody}
               </p>
-              <a
-                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Booking 30 minutes with Ruah')}`}
-                className="inline-block bg-brand-gradient text-white px-6 py-3 rounded-control font-semibold"
-              >
-                {copy.placeholderCta}
-              </a>
+              <ContactEmail
+                subject={copy.placeholderSubject}
+                cta={copy.placeholderCta}
+                label={copy.emailUsLabel}
+              />
               <p className="text-xs text-ink-faint mt-6 max-w-md mx-auto">
                 {copy.placeholderDevNote}
               </p>
@@ -176,12 +176,9 @@ export default function ConciergePage() {
           <div className="bg-warm rounded-card p-6">
             <h2 className="font-semibold text-ink mb-2">{copy.whoTitle}</h2>
             <p className="text-sm text-ink-muted leading-relaxed mb-3">{copy.whoBody}</p>
-            <a
-              href={`mailto:${CONTACT_EMAIL}`}
-              className="text-sm text-brand-strong font-medium hover:underline"
-            >
-              {copy.whoEmailLabel} →
-            </a>
+            <p className="text-sm text-ink-muted">
+              <ContactEmail label={copy.whoEmailLabel} />
+            </p>
           </div>
         </section>
 

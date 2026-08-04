@@ -63,7 +63,8 @@ Two of these were not in the original brief and are worth counsel's attention:
 | 11 | Breach-notification duties: the DC statute plus any other state where we have users, and each timeline |
 | 12 | Which state privacy laws actually apply given our size; whether DC has enacted a comprehensive statute by the effective date |
 | 13 | Hosting regions; whether we will serve users outside the US (if so, GDPR/UK work is needed) |
-| 15 | A real privacy contact address and postal address. A personal Gmail is fine for a draft, not for a published policy — **and the address currently in the codebase should be spelled-checked against the founder's actual address before launch** |
+| 15 | A real privacy contact address and postal address. The personal Gmail is gone — every user-facing surface now shows `hello@ruahruah.com` — but a postal address is still needed before publication |
+| 15 | TO CONFIRM — lawyer may recommend a dedicated privacy@ address for the Privacy Policy; hello@ used for now. |
 
 ### Terms of Service
 

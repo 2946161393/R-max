@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import ContactEmail from '@/components/ContactEmail'
 
 /* Trust & Safety.
    Framing rule for anyone editing this file: INFORM AND GUIDE. Ruah does not
@@ -18,8 +19,6 @@ export const metadata: Metadata = {
   description:
     'What Ruah verifies, what we do not check, how to arrange your own background check, and what DC law asks of household employers.',
 }
-
-const CONTACT_EMAIL = 'zijinwang168@gmail.com'
 
 const LINKS = {
   doesService: 'https://does.dc.gov/service/domestic-worker-employment-rights',
@@ -139,6 +138,8 @@ const copy = {
   reportBody:
     'If a profile, a message, or an interaction feels wrong, report it. We read everything that comes in, and we act on anything involving safety. You do not need to be certain before you tell us.',
   reportCta: 'Report something to us',
+  reportSubject: 'Reporting something to Ruah',
+  emailUsLabel: 'Or email us',
 }
 
 function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -308,12 +309,11 @@ export default function TrustAndSafetyPage() {
         <section className="mb-12">
           <SectionHeading>{copy.reportTitle}</SectionHeading>
           <p className="text-ink-muted leading-relaxed mb-5">{copy.reportBody}</p>
-          <a
-            href={`mailto:${CONTACT_EMAIL}`}
-            className="inline-block bg-brand-gradient text-white px-6 py-3 rounded-control font-semibold"
-          >
-            {copy.reportCta}
-          </a>
+          <ContactEmail
+            subject={copy.reportSubject}
+            cta={copy.reportCta}
+            label={copy.emailUsLabel}
+          />
         </section>
 
         <div className="pt-6 border-t border-line text-sm">

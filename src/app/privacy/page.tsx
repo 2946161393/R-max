@@ -1,14 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Confirm, Key, LegalDoc, Points, type LegalSection } from '@/components/legal/LegalDoc'
+import ContactEmail from '@/components/ContactEmail'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — Ruah',
   description:
     'What Ruah collects, why, who can see it, and what you can ask us to do about it. Draft, under legal review.',
 }
-
-const CONTACT_EMAIL = 'zijinwang168@gmail.com'
 
 const sections: LegalSection[] = [
   {
@@ -454,12 +453,8 @@ const sections: LegalSection[] = [
           <li>delete your identity verification documents specifically.</li>
         </Points>
         <p>
-          To do any of these, email us at{' '}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand-strong hover:underline">
-            {CONTACT_EMAIL}
-          </a>
-          . We will respond within a reasonable time and will not charge you for
-          it.
+          To do any of these, email us at <ContactEmail />. We will respond
+          within a reasonable time and will not charge you for it.
         </p>
         <p>
           Some states give residents additional rights — California, Virginia,
@@ -523,16 +518,13 @@ const sections: LegalSection[] = [
       <>
         <p>
           Questions about this policy, or about anything we hold on you, go to{' '}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand-strong hover:underline">
-            {CONTACT_EMAIL}
-          </a>
-          . A real person reads it.
+          <ContactEmail />. A real person reads it.
         </p>
         <p>
           <Confirm>
-            a dedicated privacy contact address and a postal address. A personal
-            Gmail account is fine for a draft and not fine on a published
-            policy. Verify the spelling of this address before launch.
+            whether this policy should name a dedicated privacy contact rather
+            than our general address, and what postal address to publish
+            alongside it.
           </Confirm>
         </p>
       </>

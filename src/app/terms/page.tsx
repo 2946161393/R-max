@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Confirm, Key, LegalDoc, Points, type LegalSection } from '@/components/legal/LegalDoc'
+import ContactEmail from '@/components/ContactEmail'
 
 export const metadata: Metadata = {
   title: 'Terms of Service — Ruah',
@@ -8,7 +9,6 @@ export const metadata: Metadata = {
     'The rules for using Ruah: what we do, what we do not do, and what each side is responsible for. Draft, under legal review.',
 }
 
-const CONTACT_EMAIL = 'zijinwang168@gmail.com'
 const DOES_URL = 'https://does.dc.gov'
 
 const sections: LegalSection[] = [
@@ -374,11 +374,7 @@ const sections: LegalSection[] = [
     body: (
       <>
         <p>
-          You can close your account at any time by emailing{' '}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand-strong hover:underline">
-            {CONTACT_EMAIL}
-          </a>
-          .{' '}
+          You can close your account at any time by emailing <ContactEmail />.{' '}
           <Confirm>
             build self-service account deletion, or state plainly that deletion
             is by email request only.
@@ -514,11 +510,7 @@ const sections: LegalSection[] = [
     body: (
       <>
         <p>
-          Questions about these terms go to{' '}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand-strong hover:underline">
-            {CONTACT_EMAIL}
-          </a>
-          .
+          Questions about these terms go to <ContactEmail />.
         </p>
         <p>
           <Confirm>

@@ -1,10 +1,9 @@
 import Link from 'next/link'
+import ContactEmail from '@/components/ContactEmail'
 
 /* Rendered once from the root layout, so /privacy, /terms and /trust are
    reachable from every page. `mt-auto` pins it to the bottom of the body's
    flex column, below whatever the page rendered. */
-
-const CONTACT_EMAIL = 'zijinwang168@gmail.com'
 
 export default function SiteFooter() {
   return (
@@ -25,9 +24,7 @@ export default function SiteFooter() {
           <Link href="/trust" className="text-ink-muted hover:text-ink">
             Trust &amp; Safety
           </Link>
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-ink-muted hover:text-ink">
-            Contact
-          </a>
+          <ContactEmail label="Contact" tone="muted" />
         </nav>
       </div>
     </footer>
