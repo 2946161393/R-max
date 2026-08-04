@@ -132,8 +132,8 @@ const copy = {
 
   conciergeTitle: 'Would you rather talk this through with someone?',
   conciergeBody:
-    'Deciding who to let into your home is a lot to weigh on your own. You can book 20 minutes with our founder, walk through your family’s situation, and have your first match coordinated personally.',
-  conciergeCta: 'Book 20 minutes with our founder',
+    'Deciding who to let into your home is a lot to weigh on your own. You can book 30 minutes with our founder, walk through your family’s situation, and have your first match coordinated personally.',
+  conciergeCta: 'Book 30 minutes with our founder',
 
   reportTitle: 'Tell us when something is wrong',
   reportBody:

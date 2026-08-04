@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import CalEmbed from './CalEmbed'
 
 /* Founder concierge booking.
 
@@ -15,30 +16,38 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'Talk to a real person — Ruah',
   description:
-    'Book 20 minutes with our founder. We will understand your family’s needs and personally coordinate your first match.',
+    'Book 30 minutes with our founder. We will understand your family’s needs and personally coordinate your first match.',
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   PLACEHOLDER — replace with the real Cal.com booking link.
+   Live Cal.com booking link — the "Talk with the Ruah team" 30-minute event.
 
-   Set this to the founder's Cal.com URL, for example:
-     const CAL_BOOKING_URL: string | null = 'https://cal.com/zijin/20min'
+   Set it back to null to take booking offline; the page then renders the
+   clearly-marked placeholder below instead of an embed, so nothing pretends
+   to be bookable.
 
-   While it is null the page renders a clearly-marked placeholder instead of
-   an embed, so nothing pretends to be bookable before the account exists.
-   The embed is a plain iframe on purpose — no Cal.com npm package, no
-   third-party script tag, no new dependency.
+   The embed itself lives in CalEmbed.tsx — see the note there on why Cal.com
+   cannot be framed with a plain <iframe>.
+
+   If the event's duration changes on Cal.com, update the copy strings below
+   to match — the page states the length in five places.
    ───────────────────────────────────────────────────────────────────────── */
-const CAL_BOOKING_URL: string | null = null
+const CAL_BOOKING_URL: string | null = 'https://cal.com/ruah-team/talk-with-the-ruah-team'
+
+/* Cal.com's embed addresses events by `team/event` slug, not by URL. Derived so
+   the link above stays the single source of truth. */
+const calLink = CAL_BOOKING_URL
+  ? new URL(CAL_BOOKING_URL).pathname.replace(/^\/+/, '')
+  : null
 
 const CONTACT_EMAIL = 'zijinwang168@gmail.com'
 
 const copy = {
   eyebrow: 'Concierge',
   title: 'Prefer to start with a human?',
-  lede: 'Book 20 minutes with our founder. We will understand your family’s needs and personally coordinate your first match.',
+  lede: 'Book 30 minutes with our founder. We will understand your family’s needs and personally coordinate your first match.',
 
-  whatYouGetTitle: 'What the 20 minutes covers',
+  whatYouGetTitle: 'What the 30 minutes covers',
   whatYouGet: [
     {
       emoji: '👂',
@@ -62,15 +71,17 @@ const copy = {
     'It is a slower, more personal way to begin — for families who would rather explain their situation to someone than fill in a form. If you already have an account and need help with something, email us instead and we will get to it.',
   whoEmailLabel: 'Email us instead',
 
-  bookTitle: 'Book your 20 minutes',
+  bookTitle: 'Book your 30 minutes',
   bookNote: 'Free, no obligation, and there is nothing to buy at the end of it.',
 
   placeholderTitle: 'Booking opens shortly',
   placeholderBody:
-    'The scheduling link is being set up. In the meantime, email the founder directly and you will get the same 20 minutes.',
+    'The scheduling link is being set up. In the meantime, email the founder directly and you will get the same 30 minutes.',
   placeholderCta: 'Email the founder',
   placeholderDevNote:
     'Developer note: set CAL_BOOKING_URL in src/app/concierge/page.tsx to replace this block with the live booking embed.',
+
+  bookFallback: 'Or open the booking page in a new tab',
 
   selfServeTitle: 'Or start on your own',
   selfServeBody:
@@ -127,15 +138,12 @@ export default function ConciergePage() {
           <h2 className="text-2xl font-bold text-ink mb-2">{copy.bookTitle}</h2>
           <p className="text-sm text-ink-muted mb-6">{copy.bookNote}</p>
 
-          {CAL_BOOKING_URL ? (
-            <div className="bg-surface rounded-card border border-line overflow-hidden">
-              <iframe
-                src={CAL_BOOKING_URL}
-                title={copy.bookTitle}
-                className="w-full h-[42rem] border-0"
-                loading="lazy"
-              />
-            </div>
+          {CAL_BOOKING_URL && calLink ? (
+            <CalEmbed
+              calLink={calLink}
+              bookingUrl={CAL_BOOKING_URL}
+              fallbackLabel={copy.bookFallback}
+            />
           ) : (
             <div className="bg-surface rounded-card border-2 border-dashed border-line-strong p-8 text-center">
               <div className="text-3xl mb-4" aria-hidden="true">
@@ -146,7 +154,7 @@ export default function ConciergePage() {
                 {copy.placeholderBody}
               </p>
               <a
-                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Booking 20 minutes with Ruah')}`}
+                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Booking 30 minutes with Ruah')}`}
                 className="inline-block bg-brand-gradient text-white px-6 py-3 rounded-control font-semibold"
               >
                 {copy.placeholderCta}
