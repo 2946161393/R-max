@@ -32,13 +32,13 @@ const LINKS = {
     'https://www.domesticworkers.org/programs-and-campaigns/developing-policy-solutions/domestic-workers-bill-of-rights/#domestic_workers_bill_of_rights_and_protections_in_each_state',
   ndwaFairContracts:
     'https://www.domesticworkers.org/resources/fair-contracts-for-domestic-work-a-guide-for-domestic-workers-and-employers/',
-  doesService: 'https://does.dc.gov/service/domestic-worker-employment-rights',
+  /* The DC template is a fillable PDF and is also what we base a prepared
+     agreement on. The DOES service page, the DOES FAQ and NDWA's DC rights
+     page were dropped when DC became a footnote — restore them from git if a
+     future DC section wants them again. */
   doesTemplate:
     'https://does.dc.gov/sites/default/files/dc/sites/does/publication/attachments/Domestic%20Worker%20Service%20Contract%20Agreement_template_2023_fill.pdf',
-  doesFaq:
-    'https://does.dc.gov/sites/default/files/dc/sites/does/publication/attachments/Domestic%20Worker%20FAQs.pdf',
   ftcGuide: 'https://www.ftc.gov/business-guidance/resources/background-checks-what-employers-need-know',
-  ndwaRights: 'https://www.domesticworkers.org/resources/know-your-rights/washington-dc-rights/',
 }
 
 const copy = {
@@ -144,25 +144,29 @@ const copy = {
     'What they require is not uniform. Depending on where you live, the law may cover written agreements, rest and meal breaks, paid time off, notice before a schedule changes, or protection from harassment and retaliation. Look up your own state rather than assuming a neighboring state’s rules carry over.',
   stateLinkLabel: 'Check the rules where you live',
 
-  /* ── Layer 3: DC specifics. Keep every claim here scoped to DC. ──────── */
-  lawTitle: 'If you are in DC',
-  lawLead:
-    'If you hire someone to work in your home in the District of Columbia, you are their employer. The Domestic Worker Employment Rights Amendment Act of 2022 requires household employers to give domestic workers a written services contract.',
-  lawPoints: [
-    'The contract sets out the things people argue about later: pay rate and how often pay arrives, hours and overtime, duties, time off, and how either side can end the arrangement.',
-    'You must make a reasonable effort to give the worker the contract in the language they prefer. This is part of the law, not a courtesy.',
-    'The contract should be in place when work begins, and you are expected to keep your own records of hours worked and wages paid.',
-  ],
-  lawTemplateTitle: 'You do not have to draft it yourself',
-  lawTemplateBody:
-    'The DC Department of Employment Services publishes an official template contract that contains the provisions the law requires. They publish it in seven languages: English, Spanish, Chinese, French, Korean, Vietnamese, and Amharic.',
-  lawTemplateNote:
-    'Most of the families we serve speak Chinese at home, and many caregivers prefer Spanish. The official template exists in both — use them rather than translating something yourself.',
-  lawTemplateAnywhereNote:
-    'The template is a public document, so it is a useful starting point for a written agreement wherever you live. Outside the District it carries no legal force, and it will not cover whatever your own state requires — but it is a well-drafted list of the terms worth agreeing on.',
-  lawCaregiverTitle: 'If you are a caregiver',
-  lawCaregiverBody:
-    'You are entitled to that written contract, in the language you prefer. If you were never given one, you can ask for it, and the Department of Employment Services has a process for workers whose employers will not provide one.',
+  /* ── The offer. Three rules for anyone editing this block ─────────────
+     1. The agreement belongs to the family and the caregiver. Ruah never
+        requires one, and nothing here may read as a condition of using Ruah.
+     2. The offer is live today. Present tense only — no "coming soon", no
+        "we're building", nothing a reader could take as a future promise.
+     3. Jurisdiction is a footnote. The two lines at the end are the whole of
+        it; the legal layers above carry the detail. */
+  agreementTitle: 'A written agreement, if you want one',
+  agreementLead:
+    'A written agreement is a good idea — and it’s between you and your caregiver. If you’d like one, we’ll prepare it for you: based on the official template, pre-filled with the details you’ve both confirmed, in English and the caregiver’s preferred language. Just ask.',
+  agreementRevisit:
+    'And it doesn’t have to be one-and-done: some families like to revisit the agreement after a trial period or when schedules change. Whenever you want it updated, same deal — just ask.',
+  agreementCta: 'Ask us to prepare an agreement',
+  agreementSubject: 'Preparing a written agreement',
+  agreementEmailLabel: 'Or email us',
+
+  footnotesTitle: 'Two footnotes on the rules',
+  footnoteDc:
+    'In the District of Columbia a written services contract is not optional: the Domestic Worker Employment Rights Amendment Act of 2022 requires household employers to provide one, and to make a reasonable effort to provide it in the language the worker prefers. A caregiver in DC is entitled to that contract and can ask for it.',
+  footnoteDcLinkLabel: 'The official DC template contract',
+  footnoteStates:
+    'Some states have additional requirements for domestic work — check yours.',
+  footnoteStatesLinkLabel: 'Domestic worker protections by state',
 
   disclaimerTitle: 'This is information, not legal advice',
   disclaimerBody:
@@ -334,44 +338,36 @@ export default function TrustAndSafetyPage() {
           </p>
         </section>
 
-        {/* Layer 3 — DC deep dive. Everything below is DC-specific. */}
+        {/* The offer. The agreement is the family's and the caregiver's; we
+            only draft it when asked. Jurisdiction is deliberately demoted to
+            the two footnote lines at the bottom. */}
         <section className="mb-16">
-          <SectionHeading>{copy.lawTitle}</SectionHeading>
-          <p className="text-ink-muted leading-relaxed mb-5">{copy.lawLead}</p>
-          <ul className="space-y-3 list-disc pl-5 text-ink-muted leading-relaxed mb-8">
-            {copy.lawPoints.map(point => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
+          <SectionHeading>{copy.agreementTitle}</SectionHeading>
+          <p className="text-ink-muted leading-relaxed mb-5">{copy.agreementLead}</p>
+          <p className="text-ink-muted leading-relaxed mb-8">{copy.agreementRevisit}</p>
 
-          <div className="bg-surface rounded-card p-7 border border-line">
-            <h3 className="font-semibold text-ink mb-2">{copy.lawTemplateTitle}</h3>
-            <p className="text-sm text-ink-muted leading-relaxed mb-3">{copy.lawTemplateBody}</p>
-            <p className="text-sm text-ink-muted leading-relaxed mb-3">{copy.lawTemplateNote}</p>
-            <p className="text-sm text-ink-muted leading-relaxed mb-5">
-              {copy.lawTemplateAnywhereNote}
-            </p>
-            <div className="flex flex-col gap-2 text-sm">
-              <ExternalLink href={LINKS.doesTemplate}>
-                Download the official DOES contract template
-              </ExternalLink>
-              <ExternalLink href={LINKS.doesService}>
-                DOES — Domestic Worker Employment Rights
-              </ExternalLink>
-              <ExternalLink href={LINKS.doesFaq}>
-                DOES — Domestic Worker frequently asked questions
-              </ExternalLink>
-            </div>
-          </div>
+          <ContactEmail
+            subject={copy.agreementSubject}
+            cta={copy.agreementCta}
+            label={copy.agreementEmailLabel}
+          />
 
-          <div className="mt-6 bg-warm rounded-card p-6">
-            <h3 className="font-semibold text-ink mb-2">{copy.lawCaregiverTitle}</h3>
-            <p className="text-sm text-ink-muted leading-relaxed mb-3">{copy.lawCaregiverBody}</p>
-            <p className="text-sm">
-              <ExternalLink href={LINKS.ndwaRights}>
-                Know your rights as a domestic worker in DC
-              </ExternalLink>
-            </p>
+          <div className="mt-10 pt-6 border-t border-line">
+            <h3 className="text-sm font-semibold text-ink mb-3">{copy.footnotesTitle}</h3>
+            <ol className="space-y-3 list-decimal pl-5 text-sm text-ink-muted leading-relaxed">
+              <li>
+                {copy.footnoteDc}{' '}
+                <ExternalLink href={LINKS.doesTemplate}>
+                  {copy.footnoteDcLinkLabel}
+                </ExternalLink>
+              </li>
+              <li>
+                {copy.footnoteStates}{' '}
+                <ExternalLink href={LINKS.ndwaStateList}>
+                  {copy.footnoteStatesLinkLabel}
+                </ExternalLink>
+              </li>
+            </ol>
           </div>
         </section>
 
