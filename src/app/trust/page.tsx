@@ -17,10 +17,21 @@ import ContactEmail from '@/components/ContactEmail'
 export const metadata: Metadata = {
   title: 'Trust & Safety — Ruah',
   description:
-    'What Ruah verifies, what we do not check, how to arrange your own background check, and what DC law asks of household employers.',
+    'What Ruah verifies, what we do not check, how to arrange your own background check, and what the law asks of household employers — federally, in your state, and in DC.',
 }
 
+/* Every factual claim in the federal and state layers below is taken from one
+   of these pages, checked against the source rather than written from memory.
+   If you edit that copy, re-read the source first. */
 const LINKS = {
+  dolPrivateHome: 'https://www.dol.gov/agencies/whd/fact-sheets/79-flsa-private-home-domestic-service',
+  dolRecordkeeping:
+    'https://www.dol.gov/agencies/whd/fact-sheets/79c-flsa-domestic-service-recordkeeping',
+  dolStateMinimumWage: 'https://www.dol.gov/agencies/whd/minimum-wage/state',
+  ndwaStateList:
+    'https://www.domesticworkers.org/programs-and-campaigns/developing-policy-solutions/domestic-workers-bill-of-rights/#domestic_workers_bill_of_rights_and_protections_in_each_state',
+  ndwaFairContracts:
+    'https://www.domesticworkers.org/resources/fair-contracts-for-domestic-work-a-guide-for-domestic-workers-and-employers/',
   doesService: 'https://does.dc.gov/service/domestic-worker-employment-rights',
   doesTemplate:
     'https://does.dc.gov/sites/default/files/dc/sites/does/publication/attachments/Domestic%20Worker%20Service%20Contract%20Agreement_template_2023_fill.pdf',
@@ -108,7 +119,33 @@ const copy = {
   caregiverCheckBody:
     'A family must ask your permission in writing before running a background check, and you are allowed to say no. Many caregivers agree because it helps them get hired sooner. That is your decision to make, not ours, and declining does not affect your standing on Ruah.',
 
-  lawTitle: 'Hiring in DC? The law asks for a written contract',
+  /* ── Layer 1: true wherever you live ─────────────────────────────────── */
+  federalTitle: 'Hiring someone to work in your home makes you an employer',
+  federalLead:
+    'This part does not depend on where you live. When you hire a caregiver to work in your home, you are a household employer, and federal wage law treats the person you hired as your employee rather than as a contractor you booked.',
+  federalPoints: [
+    'The Department of Labor states that people employed in domestic service in private homes are covered by the Fair Labor Standards Act, and it lists nannies and babysitters among them.',
+    'Covered workers must be paid at least the federal minimum wage, plus overtime at one and a half times their regular rate for hours worked beyond 40 in a week for the same employer.',
+    'A caregiver who lives in your home is exempt from the overtime rule but is still owed the minimum wage for every hour worked.',
+    'Babysitting employed on a casual basis is exempt from both. Casual means irregular or intermittent work by someone whose vocation is not babysitting, so an occasional evening sitter may qualify where a regular nanny does not.',
+    'You are expected to keep records for any worker owed minimum wage or overtime: their name and address, the hours worked each day and each week, and what you paid. The Department of Labor asks employers to keep these for three years.',
+  ],
+  federalWageNote:
+    'That is the federal floor, not the whole answer. Many states set a higher minimum wage, and where they do, the higher rate is the one you owe.',
+  federalContractTitle: 'Put it in writing, wherever you are',
+  federalContractBody:
+    'Only some places require a written agreement, but a written agreement is worth having everywhere. It settles the things people argue about later: the pay rate and when pay arrives, the hours, the duties, time off, and how either side can end the arrangement. The National Domestic Workers Alliance publishes a plain-language guide for workers and employers.',
+
+  /* ── Layer 2: varies by state ────────────────────────────────────────── */
+  stateTitle: 'Your state may ask for more than the federal floor',
+  stateLead:
+    'A number of places have passed a Domestic Workers Bill of Rights, which extends protections beyond the federal baseline. By the National Domestic Workers Alliance’s count, twelve states, two major cities, and the District of Columbia have one.',
+  stateBody:
+    'What they require is not uniform. Depending on where you live, the law may cover written agreements, rest and meal breaks, paid time off, notice before a schedule changes, or protection from harassment and retaliation. Look up your own state rather than assuming a neighboring state’s rules carry over.',
+  stateLinkLabel: 'Check the rules where you live',
+
+  /* ── Layer 3: DC specifics. Keep every claim here scoped to DC. ──────── */
+  lawTitle: 'If you are in DC',
   lawLead:
     'If you hire someone to work in your home in the District of Columbia, you are their employer. The Domestic Worker Employment Rights Amendment Act of 2022 requires household employers to give domestic workers a written services contract.',
   lawPoints: [
@@ -121,13 +158,15 @@ const copy = {
     'The DC Department of Employment Services publishes an official template contract that contains the provisions the law requires. They publish it in seven languages: English, Spanish, Chinese, French, Korean, Vietnamese, and Amharic.',
   lawTemplateNote:
     'Most of the families we serve speak Chinese at home, and many caregivers prefer Spanish. The official template exists in both — use them rather than translating something yourself.',
+  lawTemplateAnywhereNote:
+    'The template is a public document, so it is a useful starting point for a written agreement wherever you live. Outside the District it carries no legal force, and it will not cover whatever your own state requires — but it is a well-drafted list of the terms worth agreeing on.',
   lawCaregiverTitle: 'If you are a caregiver',
   lawCaregiverBody:
     'You are entitled to that written contract, in the language you prefer. If you were never given one, you can ask for it, and the Department of Employment Services has a process for workers whose employers will not provide one.',
 
   disclaimerTitle: 'This is information, not legal advice',
   disclaimerBody:
-    'Ruah is not a law firm and does not give legal, tax, or employment advice. This page points you toward the official sources so you can read them yourself or take them to someone who can advise you. Where anything here differs from what the District of Columbia publishes, the District is right and we are not.',
+    'Ruah is not a law firm and does not give legal, tax, or employment advice. This page points you toward the official sources so you can read them yourself or take them to someone who can advise you. Where anything here differs from what the Department of Labor, your own state, or the District of Columbia publishes, they are right and we are not.',
 
   conciergeTitle: 'Would you rather talk this through with someone?',
   conciergeBody:
@@ -244,7 +283,58 @@ export default function TrustAndSafetyPage() {
           </div>
         </section>
 
-        {/* DC law */}
+        {/* Employer duties, widest scope first: federal, then state, then DC.
+            Read top-down it answers "what is true for me?" before "what is
+            true here?", which is the right order for a reader who is not in
+            the District. */}
+
+        {/* Layer 1 — federal, true everywhere */}
+        <section className="mb-16">
+          <SectionHeading>{copy.federalTitle}</SectionHeading>
+          <p className="text-ink-muted leading-relaxed mb-5">{copy.federalLead}</p>
+          <ul className="space-y-3 list-disc pl-5 text-ink-muted leading-relaxed mb-5">
+            {copy.federalPoints.map(point => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+          <p className="text-ink-muted leading-relaxed mb-6">{copy.federalWageNote}</p>
+
+          <div className="flex flex-col gap-2 text-sm mb-8">
+            <ExternalLink href={LINKS.dolPrivateHome}>
+              US Department of Labor — Private homes and domestic service employment
+            </ExternalLink>
+            <ExternalLink href={LINKS.dolRecordkeeping}>
+              US Department of Labor — Recordkeeping for households who employ domestic workers
+            </ExternalLink>
+            <ExternalLink href={LINKS.dolStateMinimumWage}>
+              US Department of Labor — State minimum wage laws
+            </ExternalLink>
+          </div>
+
+          <div className="bg-surface rounded-card p-7 border border-line">
+            <h3 className="font-semibold text-ink mb-2">{copy.federalContractTitle}</h3>
+            <p className="text-sm text-ink-muted leading-relaxed mb-5">
+              {copy.federalContractBody}
+            </p>
+            <p className="text-sm">
+              <ExternalLink href={LINKS.ndwaFairContracts}>
+                Fair contracts for domestic work — a guide for workers and employers
+              </ExternalLink>
+            </p>
+          </div>
+        </section>
+
+        {/* Layer 2 — state and city */}
+        <section className="mb-16">
+          <SectionHeading>{copy.stateTitle}</SectionHeading>
+          <p className="text-ink-muted leading-relaxed mb-5">{copy.stateLead}</p>
+          <p className="text-ink-muted leading-relaxed mb-6">{copy.stateBody}</p>
+          <p className="text-sm">
+            <ExternalLink href={LINKS.ndwaStateList}>{copy.stateLinkLabel}</ExternalLink>
+          </p>
+        </section>
+
+        {/* Layer 3 — DC deep dive. Everything below is DC-specific. */}
         <section className="mb-16">
           <SectionHeading>{copy.lawTitle}</SectionHeading>
           <p className="text-ink-muted leading-relaxed mb-5">{copy.lawLead}</p>
@@ -257,7 +347,10 @@ export default function TrustAndSafetyPage() {
           <div className="bg-surface rounded-card p-7 border border-line">
             <h3 className="font-semibold text-ink mb-2">{copy.lawTemplateTitle}</h3>
             <p className="text-sm text-ink-muted leading-relaxed mb-3">{copy.lawTemplateBody}</p>
-            <p className="text-sm text-ink-muted leading-relaxed mb-5">{copy.lawTemplateNote}</p>
+            <p className="text-sm text-ink-muted leading-relaxed mb-3">{copy.lawTemplateNote}</p>
+            <p className="text-sm text-ink-muted leading-relaxed mb-5">
+              {copy.lawTemplateAnywhereNote}
+            </p>
             <div className="flex flex-col gap-2 text-sm">
               <ExternalLink href={LINKS.doesTemplate}>
                 Download the official DOES contract template
