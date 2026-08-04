@@ -63,7 +63,7 @@ export default function Home() {
               <p className="text-gray-400 text-sm mt-3">
                 Prefer to start with a human?{' '}
                 <Link href="/concierge" className="text-[#4A90D9] hover:underline">
-                  Book 30 minutes with our founder →
+                  Book 30 minutes with the Ruah Team →
                 </Link>
               </p>
             </div>

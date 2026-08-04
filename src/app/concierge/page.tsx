@@ -2,7 +2,12 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import CalEmbed from './CalEmbed'
 
-/* Founder concierge booking.
+/* Ruah Team concierge booking.
+
+   Voice rule: the call is with "the Ruah Team", never "the founder". It is a
+   family talking to a real person on the team, not a meeting with the founder,
+   and it matches the Cal.com event ("Talk with the Ruah Team"). Keep the first
+   person plural — we listen, we reach out — so no single person is promised.
 
    Framing rule: this is a premium way to START, not a support channel. It is
    offered to visitors who have not committed yet — the landing hero and the
@@ -16,7 +21,7 @@ import CalEmbed from './CalEmbed'
 export const metadata: Metadata = {
   title: 'Talk to a real person — Ruah',
   description:
-    'Book 30 minutes with our founder. We will understand your family’s needs and personally coordinate your first match.',
+    'Book 30 minutes with the Ruah Team. We will understand your family’s needs and personally coordinate your first match.',
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -40,12 +45,12 @@ const calLink = CAL_BOOKING_URL
   ? new URL(CAL_BOOKING_URL).pathname.replace(/^\/+/, '')
   : null
 
-const CONTACT_EMAIL = 'zijinwang168@gmail.com'
+const CONTACT_EMAIL = 'hello@ruahruah.com'
 
 const copy = {
   eyebrow: 'Concierge',
   title: 'Prefer to start with a human?',
-  lede: 'Book 30 minutes with our founder. We will understand your family’s needs and personally coordinate your first match.',
+  lede: 'Book 30 minutes with the Ruah Team. A real person will understand your family’s needs and personally coordinate your first match.',
 
   whatYouGetTitle: 'What the 30 minutes covers',
   whatYouGet: [
@@ -62,7 +67,7 @@ const copy = {
     {
       emoji: '🤝',
       title: 'We coordinate your first match personally',
-      body: 'The founder reaches out to caregivers on your behalf and stays with it until you have someone to meet.',
+      body: 'We reach out to caregivers on your behalf and stay with it until you have someone to meet.',
     },
   ],
 
@@ -76,8 +81,8 @@ const copy = {
 
   placeholderTitle: 'Booking opens shortly',
   placeholderBody:
-    'The scheduling link is being set up. In the meantime, email the founder directly and you will get the same 30 minutes.',
-  placeholderCta: 'Email the founder',
+    'The scheduling link is being set up. In the meantime, email us directly and you will get the same 30 minutes.',
+  placeholderCta: 'Email the Ruah Team',
   placeholderDevNote:
     'Developer note: set CAL_BOOKING_URL in src/app/concierge/page.tsx to replace this block with the live booking embed.',
 
