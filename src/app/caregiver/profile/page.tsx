@@ -137,24 +137,16 @@ export default function CaregiverProfile() {
     const newMessages = [...messages, { role: 'user' as const, content: userMessage }]
     setMessages(newMessages)
     setChatLoading(true)
-    const answers = profile?.onboarding_answers || {}
-    const systemPrompt = `You are Ruah!, a warm AI assistant helping caregivers write professional bios.
-The caregiver's name is ${user?.full_name}.
-Their info: services: ${profile?.services?.join(', ')}, languages: ${profile?.languages?.join(', ')}, experience: ${EXPERIENCE_LABELS[String(profile?.years_experience)] || profile?.years_experience + ' years'}, rate: $${profile?.hourly_rate_min}–$${profile?.hourly_rate_max}/hr, availability: ${answers.availability}, live-in: ${answers.living}.
-
-Your job:
-1. When the caregiver describes themselves (in ANY language including Chinese), write a warm professional English bio for them.
-2. After writing the bio, end with exactly this line on its own: **[Use this bio]**
-3. Keep bios under 100 words — warm, specific, and trustworthy.
-4. Write ONLY the English bio — no Chinese text, no intro sentences like "Here is your bio:", no "---" separators.
-5. Start directly with "Hi, I'm [name]!" or similar.`
+    // The bio-writer prompt lives server-side in src/lib/chat/prompts.ts under
+    // the key 'caregiver_bio'; /api/chat rebuilds it from this caregiver's own
+    // profile row, read through their session.
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          systemPrompt
+          promptKey: 'caregiver_bio'
         })
       })
       const data = await response.json()

@@ -50,29 +50,9 @@ export default function CaregiverChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const buildSystemPrompt = () => {
-    const answers = profile?.onboarding_answers
-    let context = ''
-
-    if (answers) {
-      const parts: string[] = []
-      if (answers.services?.length) parts.push(`Services offered: ${answers.services.join(', ')}`)
-      if (answers.experience) parts.push(`Years of experience: ${answers.experience}`)
-      if (answers.languages?.length) parts.push(`Languages: ${answers.languages.join(', ')}`)
-      if (answers.availability) parts.push(`Availability: ${answers.availability}`)
-      if (answers.living) parts.push(`Live-in: ${answers.living}`)
-      if (answers.rate) parts.push(`Hourly rate: ${answers.rate}`)
-
-      if (parts.length > 0) {
-        context = `\n\nThis caregiver's profile info:\n${parts.join('\n')}\n\nUse this to give personalized advice.`
-      }
-    }
-
-    return `You are Ruah!, a warm AI assistant helping caregivers on the Ruah platform.
-You help caregivers write great bios, improve their profiles, understand pricing, and connect with families.
-You speak in a friendly, encouraging tone. Keep replies SHORT — max 100 words unless writing a full bio.
-The caregiver's name is ${user?.full_name || 'there'}.${context}`
-  }
+  // The system prompt now lives server-side in src/lib/chat/prompts.ts under
+  // the key 'caregiver_chat'. /api/chat rebuilds it from this caregiver's own
+  // profile, read through their session — the client no longer supplies it.
 
   const sendMessage = async (text?: string) => {
     const userMessage = text || input.trim()
@@ -91,7 +71,7 @@ The caregiver's name is ${user?.full_name || 'there'}.${context}`
             role: m.role,
             content: m.content
           })),
-          systemPrompt: buildSystemPrompt()
+          promptKey: 'caregiver_chat'
         })
       })
 

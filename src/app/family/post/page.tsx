@@ -170,7 +170,7 @@ function PostRequestContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: `Write a warm, concise job post for a family looking for care. Keep it under 120 words, friendly tone, no headers needed. Details:\n${buildContext()}` }],
-          systemPrompt: `You are Ruah!, a warm AI assistant for a family care platform. Write natural, friendly job posts that feel personal, not corporate. Write in first person from the family's perspective. Do not use markdown headers or bullet points — just flowing sentences.`
+          promptKey: 'family_post'
         })
       })
       const data = await res.json()
