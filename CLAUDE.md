@@ -59,7 +59,11 @@ are the wedge — every layout must survive zh/en string-length differences.
 
 Enforcement plus the contact guardrails (24h cooldown, 3-per-7d cap — both
 per caregiver ACROSS all her matches): `src/lib/followup/guardrails.ts`,
-pure functions with unit tests.
+pure functions covered by `guardrails.test.ts` (54 cases, `npm test` —
+Node's built-in runner via type stripping, needs Node ≥22.6, no framework).
+The cooldown/cap ledger is also enforced by `/api/contact` and
+`/api/approve-proposal` — any new platform→caregiver message path must
+check it too, or it becomes a spam hole around the agent.
 
 ## Workflow rules
 
@@ -99,9 +103,33 @@ pure functions with unit tests.
 
 ## Known-open (intentional — don't "fix" in passing)
 
-- RBAC: admin = hardcoded email list; `users.role` is advisory.
-- RLS audit: pending before public launch; client-side queries currently
-  assume permissive policies.
+- RBAC: admin = hardcoded email list; `users.role` is advisory. The list is
+  mirrored in SQL as `public.is_ruah_admin()` (created by the lockdown
+  migration) — change one, change the other.
+- RLS: audited and closed 2026-08-04 by
+  `supabase/migrations/20260804020000_rls_consolidated.sql` — one atomic,
+  re-runnable file covering grants, helper functions, browse views and the
+  policies on all eight governed tables. It drops existing policies on those
+  tables BY ENUMERATION before installing its own, because the live database
+  was found carrying a policy set this repo never wrote.
+  Two rules from that work bind any new policy: every relationship lookup
+  goes in a SECURITY DEFINER helper (an inline EXISTS across two
+  RLS-protected tables recurses), and public browsing goes through the
+  `caregiver_public` view, never the base table. `npm run rls:check` is the
+  regression — run it after ANY policy or query change.
+- The Ruah message audience rule lives in BOTH `src/lib/messages.ts` (for
+  rendering) and the `messages_select_audience` policy (for real). Change
+  one, change the other, then run `npm run rls:check`.
+- Cross-user notifications go through `/api/notify`, which verifies the two
+  parties share a match. `notifications` INSERT is RLS-limited to
+  `user_id = auth.uid()`, so a browser can only notify itself.
+- Route auth rule (from the same audit): identity from the session, never
+  from the request body; authenticate BEFORE spending Anthropic tokens;
+  never `select('*')` on a table anon can reach — column grants make it
+  fail outright. `/api/approve-proposal` is the reference implementation.
+- `family_profiles.auto_replies` is collected by the family profile UI but
+  nothing consumes it — `/api/ai-autoreply` was deleted (unauthenticated
+  service-role hole). Rebuild it properly or drop the UI.
 - `applications` table: legacy, superseded by matches ("unify applications
   into matches" commit) — cleanup pending.
 - Duplicate-insertion bug: near-identical matches created seconds apart
