@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { notifyUser } from '@/lib/notifications'
 
 const EXPERIENCE_LABELS: Record<string, string> = {
   '0': 'Less than 1 year',
@@ -152,36 +153,36 @@ export default function AdminMatching() {
 
         const matchId = matchData?.id
 
-        // Notify caregiver — "A family wants to meet you"
-        await supabase.from('notifications').insert([
-          {
-            user_id: caregiver.id,
-            type: 'new_match',
-            title: `A family wants to meet you! 🎯`,
-            body: manualNote || `The Ruah team thinks you'd be a great fit. Respond within 48 hours!`,
-            data: {
-              matchId,
-              adminMatch: true,
-              familyUserId: selectedFamily.id,
-              familyName: selectedFamily.full_name,
-              requestId: reqData.id,
-            }
-          },
-          // Notify family — "We found a match"
-          {
-            user_id: selectedFamily.id,
-            type: 'new_match',
-            title: `We found a great match for you! 🎯`,
-            body: manualNote || `The Ruah team has matched you with ${caregiver.full_name}. Let us know if you're interested within 48 hours!`,
-            data: {
-              matchId,
-              adminMatch: true,
-              caregiverUserId: caregiver.id,
-              caregiverName: caregiver.full_name,
-              requestId: reqData.id,
-            }
+        // Both notices are cross-user, so both go through /api/notify. The
+        // admin allowlist is re-checked server-side there; being on the admin
+        // page is not by itself proof of anything.
+        await notifyUser({
+          recipientUserId: caregiver.id,
+          type: 'new_match',
+          title: `A family wants to meet you! 🎯`,
+          body: manualNote || `The Ruah team thinks you'd be a great fit. Respond within 48 hours!`,
+          data: {
+            matchId,
+            adminMatch: true,
+            familyUserId: selectedFamily.id,
+            familyName: selectedFamily.full_name,
+            requestId: reqData.id,
           }
-        ])
+        })
+
+        await notifyUser({
+          recipientUserId: selectedFamily.id,
+          type: 'new_match',
+          title: `We found a great match for you! 🎯`,
+          body: manualNote || `The Ruah team has matched you with ${caregiver.full_name}. Let us know if you're interested within 48 hours!`,
+          data: {
+            matchId,
+            adminMatch: true,
+            caregiverUserId: caregiver.id,
+            caregiverName: caregiver.full_name,
+            requestId: reqData.id,
+          }
+        })
 
         // Update caregiver match_no_response_count tracking
         await supabase.from('caregiver_profiles')

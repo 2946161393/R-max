@@ -35,58 +35,9 @@ const SUGGESTIONS = [
   "Compare full-time nanny vs au pair options",
 ]
 
-function buildSystemPrompt(user: any, familyProfile: any) {
-  const answers = familyProfile?.onboarding_answers
-  let context = ''
-
-  if (answers) {
-    const parts: string[] = []
-    if (answers.services?.length) parts.push(`Services needed: ${answers.services.join(', ')}`)
-    if (answers.childcare_type) parts.push(`Childcare type: ${answers.childcare_type}`)
-    if (answers.childcare_when) parts.push(`Start date: ${answers.childcare_when}`)
-    if (answers.childcare_schedule) parts.push(`Schedule: ${answers.childcare_schedule}`)
-    if (answers.childcare_kids) parts.push(`Number of children: ${answers.childcare_kids}`)
-    if (answers.childcare_ages?.length) parts.push(`Children ages: ${answers.childcare_ages.join(', ')}`)
-    if (answers.childcare_extras?.length) parts.push(`Extra needs: ${answers.childcare_extras.join(', ')}`)
-    if (answers.childcare_budget) parts.push(`Childcare budget: ${answers.childcare_budget}/hr`)
-    if (answers.chef_type) parts.push(`Chef service: ${answers.chef_type}`)
-    if (answers.chef_cuisine) parts.push(`Cuisine preference: ${answers.chef_cuisine}`)
-    if (answers.chef_budget) parts.push(`Chef budget: ${answers.chef_budget}/hr`)
-    if (answers.house_type) parts.push(`Housekeeping type: ${answers.house_type}`)
-    if (answers.house_size) parts.push(`Home size: ${answers.house_size}`)
-    if (answers.house_frequency) parts.push(`Cleaning frequency: ${answers.house_frequency}`)
-    if (answers.house_budget) parts.push(`Housekeeping budget: ${answers.house_budget}/session`)
-    if (answers.elder_needs?.length) parts.push(`Elder care needs: ${answers.elder_needs.join(', ')}`)
-    if (answers.elder_living) parts.push(`Elder care arrangement: ${answers.elder_living}`)
-    if (answers.elder_budget) parts.push(`Elder care budget: ${answers.elder_budget}/hr`)
-    if (answers.pet_type) parts.push(`Pet type: ${answers.pet_type}`)
-    if (answers.pet_service) parts.push(`Pet service: ${answers.pet_service}`)
-    if (answers.pet_budget) parts.push(`Pet care budget: ${answers.pet_budget}`)
-    if (answers.tutor_needs?.length) parts.push(`Tutoring needs: ${answers.tutor_needs.join(', ')}`)
-    if (answers.tutor_subject?.length) parts.push(`Subjects: ${answers.tutor_subject.join(', ')}`)
-    if (answers.tutor_age) parts.push(`Child grade level: ${answers.tutor_age}`)
-    if (answers.tutor_budget) parts.push(`Tutoring budget: ${answers.tutor_budget}/hr`)
-
-    if (parts.length > 0) {
-      context = `\n\nIMPORTANT - This family has already shared their needs during onboarding. Use this directly without asking again:\n${parts.join('\n')}\n\nDo NOT re-ask questions they've already answered. Be specific and personalized.`
-    }
-  }
-
-  return `You are Ruah!, a warm AI assistant for a family care platform.
-You help families find caregivers: nannies, chefs, housekeepers, elder care, pet care, tutors.
-The user's name is ${user?.full_name || 'there'}.
-
-RESPONSE STYLE:
-- Keep replies SHORT and warm. Max 100 words unless writing a full document.
-- Use simple formatting. Max 3-4 bullet points.
-- Never list everything at once. Be conversational.
-- If writing a job post, go ahead and write it fully.
-- End with ONE short follow-up question max.
-
-IMPORTANT: When the family asks to find or search for caregivers, respond with exactly this tag on its own line: [FIND_CAREGIVERS]
-This will trigger the system to show matching caregiver profiles.
-${context}`
-}
+// The system prompt now lives server-side in src/lib/chat/prompts.ts under
+// the key 'family_chat'. /api/chat rebuilds it from this family's own profile,
+// read through their session — the client no longer supplies it.
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -168,11 +119,10 @@ export default function ChatPage() {
   // Fetch a single caregiver card by user id (for the focused-caregiver flow)
   const fetchCaregiverCard = async (caregiverUserId: string): Promise<CaregiverCard[]> => {
     const { data } = await supabase
-      .from('caregiver_profiles')
+      .from('caregiver_public')
       .select(`
         id, user_id, bio, services, languages, years_experience,
-        hourly_rate_min, hourly_rate_max, is_verified,
-        users ( full_name, avatar_url, city )
+        hourly_rate_min, hourly_rate_max, is_verified, users
       `)
       .eq('user_id', caregiverUserId)
       .single()
@@ -181,32 +131,27 @@ export default function ChatPage() {
 
   const contactCaregiver = async (cg: CaregiverCard) => {
     setContacting(cg.user_id)
-    const answers = familyProfile?.onboarding_answers || {}
-    const familyNeeds = [
-      answers.services?.length ? `Services: ${answers.services.join(', ')}` : '',
-      answers.childcare_schedule ? `Schedule: ${answers.childcare_schedule}` : '',
-      answers.childcare_budget ? `Budget: ${answers.childcare_budget}/hr` : '',
-      answers.childcare_extras?.includes('bilingual') ? 'Bilingual caregiver preferred' : '',
-      answers.childcare_ages?.length ? `Children ages: ${answers.childcare_ages.join(', ')}` : '',
-    ].filter(Boolean).join(', ')
 
+    // Only the caregiver is named. Who the family is, what they need, and the
+    // names on the message all come from the session server-side — the client
+    // no longer gets to assert any of it.
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caregiverUserId: cg.user_id,
-          familyUserId: user?.id,
-          familyNeeds,
-          caregiverName: cg.users?.full_name || 'Caregiver',
-          familyName: user?.full_name || 'Family'
-        })
+        body: JSON.stringify({ caregiverUserId: cg.user_id })
       })
       const data = await res.json()
       if (data.success) {
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: `✅ I've reached out to **${cg.users?.full_name || 'this caregiver'}** on your behalf!\n\nHere's the message I sent:\n\n*"${data.message}"*\n\nI'll let you know when they respond! 🐻`
+        }])
+      } else {
+        // Most often the contact guardrails spacing things out (429).
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.error || "Sorry, I couldn't reach out just now. Please try again! 🐻"
         }])
       }
     } catch {
@@ -229,8 +174,6 @@ export default function ChatPage() {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setLoading(true)
 
-    const systemPrompt = buildSystemPrompt(user, familyProfile)
-
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -240,7 +183,7 @@ export default function ChatPage() {
             role: m.role,
             content: m.content
           })),
-          systemPrompt
+          promptKey: 'family_chat'
         })
       })
 

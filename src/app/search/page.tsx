@@ -131,15 +131,17 @@ export default function SearchPage() {
         }
       }
 
+      // Browsing goes through caregiver_public, not the base table: the base
+      // table is now own-row + match participants. The view already excludes
+      // banned and shadow-banned caregivers, so those filters are gone.
+      // `onboarding_answers` and the caregivers' zipcodes were selected here
+      // but never read — filtering is by state — so they are simply dropped.
       const { data } = await supabase
-        .from('caregiver_profiles')
+        .from('caregiver_public')
         .select(`
           id, services, languages, hourly_rate_min, hourly_rate_max,
-          years_experience, bio, is_verified, onboarding_answers,
-          users ( id, full_name, avatar_url, zipcode, city, state )
+          years_experience, bio, is_verified, users
         `)
-        .eq('users.is_banned', false)
-        .eq('users.is_shadow_banned', false)
         .not('bio', 'is', null)
 
       setCaregivers(data || [])

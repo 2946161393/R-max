@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import FamilyNav from '@/components/FamilyNav'
+import { notifyUser } from '@/lib/notifications'
 
 const EXPERIENCE_LABELS: Record<string, string> = {
   '0': '< 1 yr', '1': '1–2 yrs', '3': '3–5 yrs', '5': '5–10 yrs', '10': '10+ yrs',
@@ -99,21 +100,20 @@ export default function FamilyMatchesPage() {
     }
     const caregiverUserId = m.caregiver_profiles?.user_id
     const caregiverName = m.caregiver_profiles?.users?.full_name || 'the caregiver'
-    const rows: any[] = [{
+    await supabase.from('notifications').insert({
       user_id: user.id,
       type: 'message',
       title: `You hired ${caregiverName}`,
       body: 'Marked as hired — your request is filled and Ruah stops working this match.',
       data: { matchId: m.id, isAi: true },
-    }]
-    if (caregiverUserId) rows.push({
-      user_id: caregiverUserId,
+    })
+    if (caregiverUserId) await notifyUser({
+      recipientUserId: caregiverUserId,
       type: 'message',
       title: `${user.full_name || 'The family'} confirmed the hire`,
       body: 'The family marked this arrangement as confirmed. Congratulations!',
-      data: { matchId: m.id, isAi: true, senderId: user.id },
+      data: { matchId: m.id, isAi: true },
     })
-    await supabase.from('notifications').insert(rows)
     setMatches(prev => prev.map(x => x.id === m.id ? { ...x, status: 'hired' } : x))
     setNotice(`Confirmed — you hired ${caregiverName}.`)
   }
@@ -124,8 +124,8 @@ export default function FamilyMatchesPage() {
     const caregiverUserId = m.caregiver_profiles?.user_id
     if (caregiverUserId) {
       // She was part of an accepted arrangement — she is owed the outcome.
-      await supabase.from('notifications').insert({
-        user_id: caregiverUserId,
+      await notifyUser({
+        recipientUserId: caregiverUserId,
         type: 'match_closed',
         title: 'An arrangement was closed',
         body: `${user.full_name || 'The family'} closed this arrangement. Nothing further is needed from you.`,
@@ -165,22 +165,22 @@ export default function FamilyMatchesPage() {
 
   const triggerMutualMatch = async (matchId: string, caregiverUserId: string) => {
     await supabase.from('matches').update({ status: 'accepted' }).eq('id', matchId)
-    await supabase.from('notifications').insert([
-      {
-        user_id: user.id,
-        type: 'mutual_match',
-        title: '🎉 It\'s a match!',
-        body: 'Both you and the caregiver are interested. You can now message each other!',
-        data: { matchId, caregiverUserId }
-      },
-      {
-        user_id: caregiverUserId,
-        type: 'mutual_match',
-        title: '🎉 It\'s a match!',
-        body: 'Both you and the family are interested. You can now message each other!',
-        data: { matchId, familyUserId: user.id }
-      }
-    ])
+    // Own notification: a direct insert is fine, RLS allows user_id = auth.uid().
+    await supabase.from('notifications').insert({
+      user_id: user.id,
+      type: 'mutual_match',
+      title: '🎉 It\'s a match!',
+      body: 'Both you and the caregiver are interested. You can now message each other!',
+      data: { matchId, caregiverUserId }
+    })
+    // Hers is cross-user, so it goes through /api/notify.
+    await notifyUser({
+      recipientUserId: caregiverUserId,
+      type: 'mutual_match',
+      title: '🎉 It\'s a match!',
+      body: 'Both you and the family are interested. You can now message each other!',
+      data: { matchId, familyUserId: user.id }
+    })
     setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status: 'accepted', family_interested: true } : m))
   }
 

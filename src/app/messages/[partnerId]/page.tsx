@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
 import RequestSummaryCard from '@/components/RequestSummaryCard'
 import { isRuahMessage, ruahMessageVisibleTo } from '@/lib/messages'
+import { notifyUser } from '@/lib/notifications'
 
 export default function ChatPage() {
   const [user, setUser] = useState<any>(null)
@@ -122,27 +123,14 @@ export default function ChatPage() {
 
     if (data) {
       setMessages(prev => [...prev, data])
-      // Send notification to partner
-      await supabase.from('notifications').insert({
-        user_id: partnerId,
+      // Send notification to partner (cross-user — goes through /api/notify)
+      await notifyUser({
+        recipientUserId: partnerId,
         type: 'message',
         title: `New message from ${user.full_name}`,
         body: content.slice(0, 100),
-        data: { senderId: user.id, senderName: user.full_name }
+        data: { senderName: user.full_name }
       })
-    
-      // If caregiver sent a message to a family, trigger AI auto-reply
-      if (user.role === 'caregiver' && partner?.role === 'family') {
-        fetch('/api/ai-autoreply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messageContent: content,
-            familyUserId: partnerId,
-            caregiverUserId: user.id,
-          })
-        })
-      }
     }
 
     setSending(false)

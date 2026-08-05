@@ -41,23 +41,33 @@ export default function CaregiverPublicProfile() {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser) {
         const { data: currentUserData } = await supabase
-          .from('users').select('*').eq('id', authUser.id).single()
+          .from('users').select('id, role').eq('id', authUser.id).single()
         setCurrentUser(currentUserData)
         setViewerRole(currentUserData?.role)
         setIsOwnProfile(authUser.id === userId)
       }
 
-      // Get profile user
+      // Get profile user. This page is PUBLIC — logged-out visitors reach it —
+      // so the column list is explicit and stays inside what `anon` is granted.
+      // `select('*')` here used to ship the caregiver's email and phone to
+      // every visitor's browser, rendered or not.
       const { data: userData } = await supabase
-        .from('users').select('*').eq('id', userId).single()
+        .from('users')
+        .select('id, full_name, avatar_url, city, state, is_banned, is_shadow_banned')
+        .eq('id', userId).single()
 
       if (!userData || userData.is_banned || userData.is_shadow_banned) {
         router.push('/not-found')
         return
       }
 
+      // caregiver_public: the base table is own-row + match participants now,
+      // and this page is reachable logged-out. The view carries no identity
+      // documents and no internal ops columns.
       const { data: profileData } = await supabase
-        .from('caregiver_profiles').select('*').eq('user_id', userId).single()
+        .from('caregiver_public')
+        .select('id, user_id, bio, years_experience, languages, services, hourly_rate_min, hourly_rate_max, is_verified, rating, review_count, availability_type, overnight_ok')
+        .eq('user_id', userId).single()
 
       setProfileUser(userData)
       setProfile(profileData)

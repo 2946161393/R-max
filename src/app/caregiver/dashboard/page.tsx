@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import RequestSummaryCard from '@/components/RequestSummaryCard'
-import { ADMIN_EMAILS } from '@/lib/admin/emails'
+import { notifyUser } from '@/lib/notifications'
 
 // One-tap Pass reasons. "Not my service" is deliberately absent: if that's why
 // she'd pass, the MATCH was wrong — detected objectively below and logged as a
@@ -139,22 +139,20 @@ export default function CaregiverDashboard() {
         const familyUserId = matchData.service_requests?.family_profiles?.user_id
         if (familyUserId) {
           await supabase.from('matches').update({ status: 'accepted' }).eq('id', n.data.matchId)
-          await supabase.from('notifications').insert([
-            {
-              user_id: user.id,
-              type: 'mutual_match',
-              title: '🎉 It\'s a match!',
-              body: 'Both you and the family are interested. You can now message each other!',
-              data: { matchId: n.data.matchId, familyUserId }
-            },
-            {
-              user_id: familyUserId,
-              type: 'mutual_match',
-              title: '🎉 It\'s a match!',
-              body: 'Both you and the caregiver are interested. You can now message each other!',
-              data: { matchId: n.data.matchId, caregiverUserId: user.id }
-            }
-          ])
+          await supabase.from('notifications').insert({
+            user_id: user.id,
+            type: 'mutual_match',
+            title: '🎉 It\'s a match!',
+            body: 'Both you and the family are interested. You can now message each other!',
+            data: { matchId: n.data.matchId, familyUserId }
+          })
+          await notifyUser({
+            recipientUserId: familyUserId,
+            type: 'mutual_match',
+            title: '🎉 It\'s a match!',
+            body: 'Both you and the caregiver are interested. You can now message each other!',
+            data: { matchId: n.data.matchId, caregiverUserId: user.id }
+          })
           await markAsRead(n.id)
           router.push(`/messages/${familyUserId}`)
           return
@@ -196,8 +194,8 @@ export default function CaregiverDashboard() {
     const reasonLabel = PASS_REASONS.find(r => r.value === reason)?.label
 
     if (familyUserId) {
-      await supabase.from('notifications').insert({
-        user_id: familyUserId,
+      await notifyUser({
+        recipientUserId: familyUserId,
         type: 'match_declined',
         title: `${user.full_name || 'The caregiver'} passed on your ${serviceType || 'care'} request`,
         body: `${reasonLabel ? `Reason: ${reasonLabel.toLowerCase()}. ` : ''}Ruah will look for alternatives for you.`,
@@ -206,17 +204,16 @@ export default function CaregiverDashboard() {
     }
 
     // Matching-layer signal: she was routed a service she doesn't offer.
+    // The admin recipients are resolved server-side from the allowlist — the
+    // browser no longer reads the users table to find them by email.
     if (serviceType && profile?.services?.length && !profile.services.includes(serviceType)) {
-      const { data: admins } = await supabase.from('users').select('id').in('email', ADMIN_EMAILS)
-      if (admins?.length) {
-        await supabase.from('notifications').insert(admins.map((a: any) => ({
-          user_id: a.id,
-          type: 'admin_escalation',
-          title: 'Matching signal: service mismatch',
-          body: `${user.full_name || 'A caregiver'} (services: ${profile.services.join(', ')}) was routed a ${serviceType} request and passed. Match ${matchId}.`,
-          data: { matchId },
-        })))
-      }
+      await notifyUser({
+        audience: 'admins',
+        type: 'admin_escalation',
+        title: 'Matching signal: service mismatch',
+        body: `${user.full_name || 'A caregiver'} (services: ${profile.services.join(', ')}) was routed a ${serviceType} request and passed. Match ${matchId}.`,
+        data: { matchId },
+      })
     }
 
     await markAsRead(n.id)

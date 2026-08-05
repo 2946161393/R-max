@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { notifyUser } from '@/lib/notifications'
 
 const EXPERIENCE_LABELS: Record<string, string> = {
   '0': '< 1 yr', '1': '1–2 yrs', '3': '3–5 yrs', '5': '5–10 yrs', '10': '10+ yrs',
@@ -72,23 +73,21 @@ function ApplicationsContent() {
         .update({ family_interested: true, status: 'accepted' })
         .eq('id', matchId)
 
-      // Notify both parties — mutual match
-      await supabase.from('notifications').insert([
-        {
-          user_id: user?.id,
-          type: 'mutual_match',
-          title: "🎉 It's a match!",
-          body: 'Both you and the caregiver are interested. You can now message each other!',
-          data: { matchId, caregiverUserId }
-        },
-        {
-          user_id: caregiverUserId,
-          type: 'mutual_match',
-          title: "🎉 It's a match!",
-          body: 'Both you and the family are interested. You can now message each other!',
-          data: { matchId, familyUserId: user?.id }
-        }
-      ])
+      // Notify both parties — mine directly, hers through /api/notify.
+      await supabase.from('notifications').insert({
+        user_id: user?.id,
+        type: 'mutual_match',
+        title: "🎉 It's a match!",
+        body: 'Both you and the caregiver are interested. You can now message each other!',
+        data: { matchId, caregiverUserId }
+      })
+      await notifyUser({
+        recipientUserId: caregiverUserId,
+        type: 'mutual_match',
+        title: "🎉 It's a match!",
+        body: 'Both you and the family are interested. You can now message each other!',
+        data: { matchId, familyUserId: user?.id }
+      })
 
       setApplications(prev =>
         prev.map(a => a.id === matchId ? { ...a, family_interested: true, status: 'accepted' } : a)
@@ -98,8 +97,8 @@ function ApplicationsContent() {
         .update({ family_interested: false, status: 'declined' })
         .eq('id', matchId)
 
-      await supabase.from('notifications').insert({
-        user_id: caregiverUserId,
+      await notifyUser({
+        recipientUserId: caregiverUserId,
         type: 'application_declined',
         title: 'Application update',
         body: 'Thank you for applying. The family has decided to go in a different direction.',

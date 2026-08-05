@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { notifyUser } from '@/lib/notifications'
 
 const SERVICE_LABELS: Record<string, string> = {
   childcare: 'Childcare',
@@ -75,17 +76,26 @@ export default function CaregiverRequestsPage() {
       const { data: caregiverData } = await supabase
         .from('caregiver_profiles').select('*').eq('user_id', authUser.id).single()
 
-      // Pull open requests + how many matches each already has (replaces applications count)
+      // Pull open requests. The applicant count can no longer come from an
+      // embedded `matches ( id )` — RLS shows a caregiver only her OWN match
+      // rows, so that embed would report 0 or 1 for every request. The count
+      // comes from open_request_stats, a view that aggregates past RLS
+      // without exposing whose matches they are.
       const { data: requestsData } = await supabase
         .from('service_requests')
         .select(`
           *,
-          family_profiles ( id, onboarding_answers, user_id ),
-          matches ( id )
+          family_profiles ( id, onboarding_answers, user_id )
         `)
         .eq('status', 'open')
         .neq('service_type', 'manual')
         .order('created_at', { ascending: false })
+
+      const { data: statsData } = await supabase
+        .from('open_request_stats')
+        .select('request_id, match_count')
+      const matchCounts: Record<string, number> = {}
+      statsData?.forEach((s: any) => { matchCounts[s.request_id] = Number(s.match_count) || 0 })
 
       const familyUserIds = [...new Set(
         (requestsData || [])
@@ -104,7 +114,8 @@ export default function CaregiverRequestsPage() {
 
       const enrichedRequests = (requestsData || []).map((r: any) => ({
         ...r,
-        familyUser: familyUsersMap[r.family_profiles?.user_id] || null
+        familyUser: familyUsersMap[r.family_profiles?.user_id] || null,
+        matchCount: matchCounts[r.id] || 0
       }))
 
       // Which requests is this caregiver already connected to? (any match row, either direction)
@@ -174,8 +185,8 @@ export default function CaregiverRequestsPage() {
       const familyUserId = applyingTo.familyUser?.id
       if (familyUserId) {
         // Unified notification type so the family side can wrap it in Ruah narration
-        await supabase.from('notifications').insert({
-          user_id: familyUserId,
+        await notifyUser({
+          recipientUserId: familyUserId,
           type: 'new_match',
           title: `${user?.full_name} is interested in your request! 🎯`,
           body: introMessage,
@@ -303,7 +314,7 @@ export default function CaregiverRequestsPage() {
             {filtered.map(r => {
               const familyUser = r.familyUser
               const alreadyApplied = myApplications.has(r.id)
-              const appCount = r.matches?.length || 0
+              const appCount = r.matchCount || 0
               const scheduleDays = r.schedule_days || {}
               const sortedDays = DAY_ORDER.filter(d => scheduleDays[d])
               const isExpanded = expandedId === r.id
