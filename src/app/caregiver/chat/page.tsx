@@ -37,7 +37,7 @@ export default function CaregiverChatPage() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single()
+      const { data: userData } = await supabase.from('user_self').select('*').single()
       const { data: profileData } = await supabase.from('caregiver_profiles').select('*').eq('user_id', user.id).single()
       setUser(userData)
       setProfile(profileData)

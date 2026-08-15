@@ -24,26 +24,6 @@ function formatTime(t: string) {
   return `${hour > 12 ? hour - 12 : hour || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
 }
 
-function getDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 3958.8
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLon = (lon2 - lon1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-async function getLatLng(zipcode: string): Promise<{ lat: number; lng: number } | null> {
-  try {
-    const res = await fetch(`https://api.zippopotam.us/us/${zipcode}`)
-    if (!res.ok) return null
-    const data = await res.json()
-    const place = data.places?.[0]
-    if (!place) return null
-    return { lat: parseFloat(place.latitude), lng: parseFloat(place.longitude) }
-  } catch { return null }
-}
-
 export default function CaregiverRequestsPage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -56,7 +36,7 @@ export default function CaregiverRequestsPage() {
   const [message, setMessage] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const [myLatLng, setMyLatLng] = useState<{ lat: number; lng: number } | null>(null)
+  const [hasZip, setHasZip] = useState(false)
   const [requestDistances, setRequestDistances] = useState<Record<string, number>>({})
 
   const [serviceFilter, setServiceFilter] = useState('')
@@ -72,7 +52,7 @@ export default function CaregiverRequestsPage() {
       if (!authUser) { router.push('/login'); return }
 
       const { data: userData } = await supabase
-        .from('users').select('*').eq('id', authUser.id).single()
+        .from('user_self').select('*').single()
       const { data: caregiverData } = await supabase
         .from('caregiver_profiles').select('*').eq('user_id', authUser.id).single()
 
@@ -107,7 +87,7 @@ export default function CaregiverRequestsPage() {
       if (familyUserIds.length > 0) {
         const { data: familyUsersData } = await supabase
           .from('users')
-          .select('id, full_name, avatar_url, city, state, zipcode')
+          .select('id, full_name, avatar_url, city, state')
           .in('id', familyUserIds)
         familyUsersData?.forEach((u: any) => { familyUsersMap[u.id] = u })
       }
@@ -131,21 +111,19 @@ export default function CaregiverRequestsPage() {
       setRequests(enrichedRequests)
       setMyApplications(myApps)
 
-      if (userData?.zipcode) {
-        const latLng = await getLatLng(userData.zipcode)
-        if (latLng) {
-          setMyLatLng(latLng)
-          const distances: Record<string, number> = {}
-          for (const r of enrichedRequests) {
-            const familyZip = r.familyUser?.zipcode
-            if (familyZip) {
-              const familyLatLng = await getLatLng(familyZip)
-              if (familyLatLng) {
-                distances[r.id] = getDistanceMiles(latLng.lat, latLng.lng, familyLatLng.lat, familyLatLng.lng)
-              }
-            }
-          }
-          setRequestDistances(distances)
+      // Distances are computed by /api/request-distances. Families' zipcodes
+      // stay on the server — only mileage comes back. See that route's header.
+      if (userData?.zipcode && enrichedRequests.length > 0) {
+        setHasZip(true)
+        try {
+          const res = await fetch('/api/request-distances', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestIds: enrichedRequests.map((r: any) => r.id) }),
+          })
+          if (res.ok) setRequestDistances((await res.json()).distances || {})
+        } catch {
+          // Leave distances empty; the board renders without the mileage chip.
         }
       }
 
@@ -272,7 +250,7 @@ export default function CaregiverRequestsPage() {
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-2">
               Distance
-              {!myLatLng && <span className="font-normal text-gray-400 ml-1">(add your ZIP code in profile to enable)</span>}
+              {!hasZip && <span className="font-normal text-gray-400 ml-1">(add your ZIP code in profile to enable)</span>}
             </label>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setMaxDistance(null)}
@@ -283,7 +261,7 @@ export default function CaregiverRequestsPage() {
               </button>
               {DISTANCE_OPTIONS.map(d => (
                 <button key={d} onClick={() => setMaxDistance(maxDistance === d ? null : d)}
-                  disabled={!myLatLng}
+                  disabled={!hasZip}
                   className={`px-3 py-1.5 rounded-full border text-xs transition disabled:opacity-40 ${
                     maxDistance === d ? 'border-[#7FB3FF] bg-blue-50 text-[#4A90D9] font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}>

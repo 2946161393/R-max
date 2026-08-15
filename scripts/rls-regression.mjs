@@ -213,8 +213,12 @@ async function phaseFamily(fx) {
   section(`PHASE 2 — family (${fx.family?.email})`)
   const { client: c, userId } = await sessionFor(fx.family.email)
 
-  const own = await c.from('users').select('*').eq('id', userId).single()
-  check('family reads own users row (select *)', !!own.data && !own.error, own.error?.message)
+  // Own row now comes from user_self. `users` itself no longer answers
+  // select('*') for a logged-in caller — see PHASE 5.
+  const own = await c.from('user_self').select('*').single()
+  check('family reads own row via user_self (select *)', !!own.data && !own.error, own.error?.message)
+  check('user_self returns the CALLER and nobody else',
+    own.data?.id === userId, `got ${own.data?.id}, expected ${userId}`)
 
   const ownProfile = await c.from('family_profiles').select('*').eq('user_id', userId).single()
   check('family reads own family_profiles row', !!ownProfile.data, ownProfile.error?.message)
@@ -394,6 +398,102 @@ async function sweepProbeRows() {
     `${found} row(s) had to be cleaned up — a write probe is not using ${NOWHERE}`)
 }
 
+// ---------------------------------------------------------------------------
+// PHASE 5 — column grants on `users`, and the two views that replace them.
+//
+// The gap this covers: 20260804020000 §4b reset anon's column access and
+// handed back a whitelist, but named only anon. `authenticated` kept the
+// blanket grant, so email/phone/zipcode were readable by any account anyone
+// could register — and can_view_user() returns true for EVERY caregiver row
+// with no relationship required. PHASE 1 already asserted the anon half; this
+// is the half that was missing, and it is the half that was open.
+//
+// Applied by 20260805000000_users_column_grants.sql.
+// ---------------------------------------------------------------------------
+
+const PII = ['email', 'phone', 'zipcode', 'ban_reason']
+
+async function phaseColumnGrants(fx) {
+  section('PHASE 5 — users column grants (the authenticated half)')
+
+  // ---- as a NON-ADMIN logged-in caller ------------------------------------
+  const { client: c, userId } = await sessionFor(fx.family.email)
+
+  for (const col of PII) {
+    const r = await c.from('users').select(col)
+    check(`authenticated SELECT users(${col}) → denied`,
+      r.error !== null,
+      `expected a permission error, got ${r.data?.length ?? 0} rows`)
+  }
+
+  // select('*') expands to every column BEFORE privileges are checked, so it
+  // must fail outright rather than quietly returning the granted subset.
+  const star = await c.from('users').select('*')
+  check('authenticated SELECT users(*) → denied outright',
+    star.error !== null,
+    `expected a permission error, got ${star.data?.length ?? 0} rows`)
+
+  // The product still needs the public columns, or every avatar breaks.
+  const safe = await c.from('users').select('id, full_name, avatar_url, city, state, role')
+  check('authenticated SELECT users(public columns) → still works',
+    safe.error === null && (safe.data?.length ?? 0) > 0,
+    `error=${code(safe) ?? 'none'}, rows=${safe.data?.length ?? 0}`)
+
+  // user_self: exactly one row, the caller's, whole.
+  const self = await c.from('user_self').select('*')
+  check('user_self → exactly one row', (self.data?.length ?? 0) === 1,
+    `got ${self.data?.length ?? 0} rows, error=${code(self) ?? 'none'}`)
+  check('user_self → that row is the caller', self.data?.[0]?.id === userId,
+    `got ${self.data?.[0]?.id}, expected ${userId}`)
+  check('user_self → carries the restricted columns the profile page edits',
+    self.data?.[0] !== undefined && PII.every(col => col in self.data[0]),
+    `columns: ${Object.keys(self.data?.[0] ?? {}).join(', ')}`)
+
+  // users_admin must be inert for a non-admin: zero rows, not an error.
+  const notAdmin = await c.from('users_admin').select('id')
+  check('non-admin SELECT users_admin → zero rows',
+    (notAdmin.data?.length ?? 0) === 0,
+    `got ${notAdmin.data?.length ?? 0} rows, error=${code(notAdmin) ?? 'none'}`)
+
+  // ---- as anon ------------------------------------------------------------
+  const anon = createClient(URL_, ANON, { auth: { persistSession: false } })
+  for (const v of ['user_self', 'users_admin']) {
+    const r = await anon.from(v).select('id')
+    check(`anon SELECT ${v} → denied or empty`,
+      r.error !== null || (r.data?.length ?? 0) === 0,
+      `got ${r.data?.length ?? 0} rows, error=${code(r) ?? 'none'}`)
+  }
+
+  // ---- as an admin --------------------------------------------------------
+  if (!fx.admin) {
+    check('admin fixture present for users_admin checks', false, 'no admin account found')
+    return
+  }
+  const { client: a } = await sessionFor(fx.admin.email)
+
+  const all = await a.from('users_admin').select('*')
+  check('admin SELECT users_admin → rows', (all.data?.length ?? 0) > 0,
+    `got ${all.data?.length ?? 0} rows, error=${code(all) ?? 'none'}`)
+  check('admin SELECT users_admin → email is present (the console lists by it)',
+    all.data?.[0] !== undefined && 'email' in all.data[0],
+    `columns: ${Object.keys(all.data?.[0] ?? {}).join(', ')}`)
+
+  // THE ONE THAT CANNOT BE CHECKED BY READING THE REPO.
+  // Six admin pages select users with a nested caregiver_profiles /
+  // family_profiles resource. PostgREST resolves embeds on a view through the
+  // view's source relation; if that resolution ever stops working, those pages
+  // render empty and nothing else in this suite would notice.
+  const embedCg = await a.from('users_admin').select('id, email, caregiver_profiles ( id )')
+  check('admin users_admin embeds caregiver_profiles (admin console depends on it)',
+    embedCg.error === null,
+    `error=${code(embedCg)} ${embedCg.error?.message ?? ''}`)
+
+  const embedFam = await a.from('users_admin').select('id, email, family_profiles ( onboarding_answers )')
+  check('admin users_admin embeds family_profiles (admin console depends on it)',
+    embedFam.error === null,
+    `error=${code(embedFam)} ${embedFam.error?.message ?? ''}`)
+}
+
 async function main() {
   const fx = await fixtures()
   if (!fx.family || !fx.caregiver) {
@@ -405,6 +505,7 @@ async function main() {
     await phaseFamily(fx)
     await phaseCaregiver(fx)
     await phaseAdmin(fx)
+    await phaseColumnGrants(fx)
   } finally {
     await sweepProbeRows()
     console.log(results.join('\n'))

@@ -36,7 +36,7 @@ export default function CaregiverDashboard() {
       if (!authUser) { router.push('/login'); return }
 
       const { data: userData } = await supabase
-        .from('users').select('*').eq('id', authUser.id).single()
+        .from('user_self').select('*').single()
       const { data: caregiverData } = await supabase
         .from('caregiver_profiles').select('*').eq('user_id', authUser.id).single()
       const { data: notifData } = await supabase

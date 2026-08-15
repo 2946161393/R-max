@@ -25,7 +25,7 @@ export default function AdminOverview() {
   useEffect(() => {
     const load = async () => {
       const { data: users } = await supabase
-        .from('users')
+        .from('users_admin')
         .select('*')
         .order('created_at', { ascending: false })
 

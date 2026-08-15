@@ -63,7 +63,7 @@ export default function AdminCaregivers() {
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase
-        .from('users')
+        .from('users_admin')
         .select(`
           *,
           caregiver_profiles (

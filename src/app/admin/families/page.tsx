@@ -56,7 +56,7 @@ export default function AdminFamilies() {
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase
-        .from('users')
+        .from('users_admin')
         .select(`
           *,
           family_profiles (

@@ -70,7 +70,7 @@ export default function FamilyDashboard() {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (!authUser) { router.push('/login'); return }
 
-      const { data: userData } = await supabase.from('users').select('*').eq('id', authUser.id).single()
+      const { data: userData } = await supabase.from('user_self').select('*').single()
       const { data: familyData } = await supabase.from('family_profiles').select('*').eq('user_id', authUser.id).single()
       const { data: notifData } = await supabase.from('notifications').select('*').eq('user_id', authUser.id).neq('type', INTERNAL_NOTIFICATION_TYPE).order('created_at', { ascending: false }).limit(10)
 

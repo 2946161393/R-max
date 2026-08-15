@@ -55,14 +55,14 @@ export default function AdminMatching() {
         .order('created_at', { ascending: false })
 
       const { data: familyData } = await supabase
-        .from('users')
+        .from('users_admin')
         .select(`id, full_name, email, avatar_url, created_at, family_profiles ( onboarding_answers )`)
         .eq('role', 'family')
         .eq('is_banned', false)
         .eq('is_shadow_banned', false)
 
       const { data: caregiverData } = await supabase
-        .from('users')
+        .from('users_admin')
         .select(`
           id, full_name, email, avatar_url, created_at,
           caregiver_profiles (

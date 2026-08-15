@@ -40,9 +40,8 @@ export async function proxy(request: NextRequest) {
   if (user) {
     // Fetch ban status + role in one query
     const { data: userData } = await supabase
-      .from('users')
+      .from('user_self')
       .select('is_banned, ban_reason, role')
-      .eq('id', user.id)
       .single()
 
     // Ban check

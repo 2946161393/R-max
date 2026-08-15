@@ -76,7 +76,7 @@ export default function SearchPage() {
     const load = async () => {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser) {
-        const { data: userData } = await supabase.from('users').select('zipcode, city, state, role').eq('id', authUser.id).single()
+        const { data: userData } = await supabase.from('user_self').select('zipcode, city, state, role').single()
         setUser(userData)
         if (userData?.zipcode) {
           setZipcodeFilter(userData.zipcode)

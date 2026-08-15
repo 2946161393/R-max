@@ -22,7 +22,7 @@ export default function AdminAnalytics() {
   useEffect(() => {
     const load = async () => {
       const [usersRes, matchesRes, notifsRes] = await Promise.all([
-        supabase.from('users').select('*').order('created_at', { ascending: true }),
+        supabase.from('users_admin').select('*').order('created_at', { ascending: true }),
         supabase.from('matches').select('*').order('created_at', { ascending: true }),
         supabase.from('notifications').select('*').order('created_at', { ascending: true }),
       ])

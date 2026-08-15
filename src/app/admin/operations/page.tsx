@@ -29,7 +29,7 @@ export default function AdminOperations() {
           caregiver_profiles ( user_id, services, languages, hourly_rate_min, hourly_rate_max, years_experience, bio, is_verified, background_check_status, onboarding_answers ),
           service_requests ( family_profiles ( user_id, onboarding_answers, users ( full_name, email, avatar_url ) ) )
         `).order('created_at', { ascending: false }),
-        supabase.from('users').select('id, full_name, email, role, avatar_url, created_at').order('created_at', { ascending: false }).limit(20),
+        supabase.from('users_admin').select('id, full_name, email, role, avatar_url, created_at').order('created_at', { ascending: false }).limit(20),
       ])
       setNotifications(notifsRes.data || [])
       setMatches(matchesRes.data || [])
@@ -42,7 +42,7 @@ export default function AdminOperations() {
   const openUserDrawer = async (userId: string) => {
     setDrawer({ type: 'loading' })
     const { data: user } = await supabase
-      .from('users')
+      .from('users_admin')
       .select(`
         id, full_name, email, role, avatar_url, created_at, is_banned, is_shadow_banned,
         family_profiles ( onboarding_answers ),
@@ -60,10 +60,10 @@ export default function AdminOperations() {
 
     const [caregiverRes, familyRes] = await Promise.all([
       caregiverUserId
-        ? supabase.from('users').select(`id, full_name, email, role, avatar_url, created_at, is_banned, is_shadow_banned, caregiver_profiles ( services, languages, hourly_rate_min, hourly_rate_max, years_experience, bio, is_verified, background_check_status, onboarding_answers )`).eq('id', caregiverUserId).single()
+        ? supabase.from('users_admin').select(`id, full_name, email, role, avatar_url, created_at, is_banned, is_shadow_banned, caregiver_profiles ( services, languages, hourly_rate_min, hourly_rate_max, years_experience, bio, is_verified, background_check_status, onboarding_answers )`).eq('id', caregiverUserId).single()
         : Promise.resolve({ data: null }),
       familyUserId
-        ? supabase.from('users').select(`id, full_name, email, role, avatar_url, created_at, is_banned, is_shadow_banned, family_profiles ( onboarding_answers )`).eq('id', familyUserId).single()
+        ? supabase.from('users_admin').select(`id, full_name, email, role, avatar_url, created_at, is_banned, is_shadow_banned, family_profiles ( onboarding_answers )`).eq('id', familyUserId).single()
         : Promise.resolve({ data: null }),
     ])
 

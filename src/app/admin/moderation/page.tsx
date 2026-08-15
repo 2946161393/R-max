@@ -20,7 +20,7 @@ export default function AdminModeration() {
   useEffect(() => {
     const load = async () => {
       const { data: caregiverData } = await supabase
-        .from('users')
+        .from('users_admin')
         .select(`
           *,
           caregiver_profiles (
@@ -33,7 +33,7 @@ export default function AdminModeration() {
         .order('created_at', { ascending: false })
 
       const { data: familyData } = await supabase
-        .from('users')
+        .from('users_admin')
         .select(`
           *,
           family_profiles ( onboarding_answers )

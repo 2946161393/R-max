@@ -117,6 +117,35 @@ check it too, or it becomes a spam hole around the agent.
   RLS-protected tables recurses), and public browsing goes through the
   `caregiver_public` view, never the base table. `npm run rls:check` is the
   regression — run it after ANY policy or query change.
+- COLUMN grants are a separate axis from RLS, and the 08-04 file only moved
+  it for `anon`. `authenticated` kept Supabase's blanket
+  `GRANT ... ON ALL TABLES`, so `users.email/phone/zipcode` were readable by
+  any self-registered account — `can_view_user()` returns true for EVERY
+  caregiver row with no relationship required. Closed 2026-08-05 by a
+  DELIBERATELY SPLIT PAIR — `20260805000000_user_views.sql` (additive) then
+  deploy then `20260805000100_users_column_grants.sql` (revoke). Either half
+  alone breaks every dashboard for the length of the deploy; step 2 refuses
+  to run if the views are missing. Three consequences bind new work:
+  * `authenticated` now holds a computed column grant on `users` (everything
+    except email, phone, zipcode, ban_reason). `select('*')` on `users` from
+    the browser FAILS — Postgres expands `*` before checking privileges.
+    Own-row reads go through the `user_self` view, admin reads through
+    `users_admin`. Both are `security_invoker = false`; their WHERE clause is
+    the gate. `.update()` still targets the base table.
+  * `ALTER DEFAULT PRIVILEGES ... REVOKE SELECT ... FROM authenticated` is now
+    in force. A NEW TABLE IS UNREADABLE FROM THE BROWSER until it ships its
+    own explicit GRANT alongside its policies — it will read as empty, not as
+    an error. Budget for this on anything new (e.g. a future `cases`).
+  * Never put another user's PII in a client query to make the UI compute
+    something. `/api/request-distances` exists because `/caregiver/requests`
+    was pulling every family's zipcode into the browser to render "12 mi
+    away"; the mileage is computed server-side and only the miles come back.
+- Still open, same class, not yet fixed: `caregiver_profiles` and
+  `family_profiles` have correct ROW gates but no COLUMN gates, so a matched
+  family reads the caregiver's `id_photo_path`/`selfie_path` (paths only —
+  the bucket is private), and any caregiver-role account reads the whole
+  `family_profiles` row of any family with an open request. The second needs
+  a product call on what a caregiver should see before matching.
 - The Ruah message audience rule lives in BOTH `src/lib/messages.ts` (for
   rendering) and the `messages_select_audience` policy (for real). Change
   one, change the other, then run `npm run rls:check`.

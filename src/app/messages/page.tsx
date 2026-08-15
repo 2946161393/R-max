@@ -18,7 +18,7 @@ export default function MessagesPage() {
       if (!authUser) { router.push('/login'); return }
 
       const { data: userData } = await supabase
-        .from('users').select('*').eq('id', authUser.id).single()
+        .from('user_self').select('*').single()
       setUser(userData)
 
       // Get all messages where user is sender or receiver
