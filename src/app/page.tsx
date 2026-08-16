@@ -3,9 +3,12 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import LangToggle from '@/components/LangToggle'
+import { useT } from '@/lib/i18n/provider'
 
 export default function Home() {
   const router = useRouter()
+  const t = useT()
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
@@ -13,6 +16,29 @@ export default function Home() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  // Keys only. The strings live in src/lib/i18n/dict.ts so both locales stay
+  // side by side; the emoji and the colours are not translatable and stay here.
+  const steps = [
+    { step: '01', emoji: '💬', title: 'home.how.1.title', desc: 'home.how.1.desc' },
+    { step: '02', emoji: '🤝', title: 'home.how.2.title', desc: 'home.how.2.desc' },
+    { step: '03', emoji: '✨', title: 'home.how.3.title', desc: 'home.how.3.desc' },
+  ] as const
+
+  const services = [
+    { emoji: '👶', label: 'home.services.fulltime.label', desc: 'home.services.fulltime.desc', color: 'bg-blue-50' },
+    { emoji: '🎒', label: 'home.services.afterschool.label', desc: 'home.services.afterschool.desc', color: 'bg-orange-50' },
+    { emoji: '🌙', label: 'home.services.evenings.label', desc: 'home.services.evenings.desc', color: 'bg-green-50' },
+    { emoji: '🍼', label: 'home.services.newborn.label', desc: 'home.services.newborn.desc', color: 'bg-purple-50' },
+    { emoji: '🗣', label: 'home.services.bilingual.label', desc: 'home.services.bilingual.desc', color: 'bg-yellow-50' },
+    { emoji: '☀️', label: 'home.services.breaks.label', desc: 'home.services.breaks.desc', color: 'bg-pink-50' },
+  ] as const
+
+  const trust = [
+    { emoji: '🪪', title: 'home.trust.identity.title', desc: 'home.trust.identity.desc' },
+    { emoji: '🔒', title: 'home.trust.docs.title', desc: 'home.trust.docs.desc' },
+    { emoji: '💬', title: 'home.trust.record.title', desc: 'home.trust.record.desc' },
+  ] as const
 
   return (
     <div className="min-h-screen bg-[#FAFCFF] font-sans">
@@ -24,10 +50,13 @@ export default function Home() {
             <img src="/ruah-logo.png" alt="Ruah" className="w-9 h-9" />
             <span className="text-xl font-bold text-[#7FB3FF]">Ruah！</span>
           </div>
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/login')} className="text-sm text-gray-500 hover:text-gray-800 transition">Sign in</button>
-            <button onClick={() => router.push('/onboarding/family')} className="btn-primary text-white px-5 py-2 rounded-full text-sm font-medium">
-              Get started
+          <div className="flex items-center gap-3 sm:gap-4">
+            <LangToggle />
+            <button onClick={() => router.push('/login')} className="text-sm text-gray-500 hover:text-gray-800 transition whitespace-nowrap">
+              {t('nav.signin')}
+            </button>
+            <button onClick={() => router.push('/onboarding/family')} className="btn-primary text-white px-5 py-2 rounded-full text-sm font-medium whitespace-nowrap">
+              {t('nav.getStarted')}
             </button>
           </div>
         </div>
@@ -39,31 +68,31 @@ export default function Home() {
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <div className="inline-flex items-center gap-2 bg-[#EAF4FF] text-[#4A90D9] text-xs font-medium px-3 py-1.5 rounded-full mb-6">
-                ✨ AI-powered family care
+                {t('home.hero.badge')}
               </div>
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">
-                Find trusted care<br />
-                for your family —<br />
-                <span className="text-[#7FB3FF]">without the stress.</span>
+                {t('home.hero.line1')}<br />
+                {t('home.hero.line2')}<br />
+                <span className="text-[#7FB3FF]">{t('home.hero.line3')}</span>
               </h1>
               <p className="text-gray-500 text-lg mb-8 leading-relaxed">
-                We match your family with the right caregiver automatically. Nannies, babysitters, after-school and newborn care — childcare that feels right.
+                {t('home.hero.sub')}
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button onClick={() => router.push('/onboarding/family')}
                   className="btn-primary text-white px-8 py-4 rounded-2xl font-semibold text-lg">
-                  Find a caregiver →
+                  {t('home.hero.ctaFamily')}
                 </button>
                 <button onClick={() => router.push('/onboarding/caregiver')}
                   className="border-2 border-gray-200 text-gray-600 px-8 py-4 rounded-2xl font-semibold text-lg hover:border-[#7FB3FF] hover:text-[#7FB3FF] transition">
-                  I'm a caregiver
+                  {t('home.hero.ctaCaregiver')}
                 </button>
               </div>
-              <p className="text-gray-400 text-sm mt-4">✓ Free to browse &nbsp; ✓ Verified caregivers &nbsp; ✓ No commitment</p>
+              <p className="text-gray-400 text-sm mt-4">{t('home.hero.assurances')}</p>
               <p className="text-gray-400 text-sm mt-3">
-                Prefer to start with a human?{' '}
+                {t('home.hero.humanPrompt')}{' '}
                 <Link href="/concierge" className="text-[#4A90D9] hover:underline">
-                  Book 30 minutes with the Ruah Team →
+                  {t('home.hero.humanLink')}
                 </Link>
               </p>
             </div>
@@ -78,22 +107,22 @@ export default function Home() {
                       <img src="/ruah-logo.png" alt="Ruah" className="w-36 h-36 mx-auto" />
                     </div>
                     <div className="bg-white/80 backdrop-blur px-4 py-2 rounded-2xl shadow-sm text-sm font-medium text-gray-700">
-                      Hi! I'm Ruah! 👋
+                      {t('home.card.greeting')}
                     </div>
                   </div>
                 </div>
 
                 <div className="absolute -top-2 -right-4 bg-white rounded-2xl shadow-md p-3 animate-float-slow">
-                  <div className="text-xs text-gray-500">Match found! 🎉</div>
-                  <div className="text-sm font-semibold text-gray-800">Sarah Chen</div>
-                  <div className="text-xs text-[#7FB3FF]">⭐ 4.9 · Mandarin speaker</div>
+                  <div className="text-xs text-gray-500">{t('home.card.matchFound')}</div>
+                  <div className="text-sm font-semibold text-gray-800">{t('home.card.matchName')}</div>
+                  <div className="text-xs text-[#7FB3FF]">{t('home.card.matchMeta')}</div>
                 </div>
 
                 <div className="absolute -bottom-2 -left-4 bg-white rounded-2xl shadow-md p-3 animate-float-delay">
-                  <div className="text-xs text-gray-500 mb-1">Background check</div>
+                  <div className="text-xs text-gray-500 mb-1">{t('home.card.checkLabel')}</div>
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 bg-green-400 rounded-full" />
-                    <div className="text-xs font-medium text-green-600">Verified ✓</div>
+                    <div className="text-xs font-medium text-green-600">{t('home.card.checkValue')}</div>
                   </div>
                 </div>
               </div>
@@ -105,19 +134,15 @@ export default function Home() {
       {/* HOW IT WORKS */}
       <section className="py-20 px-6 bg-white">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-3">How Ruah works</h2>
-          <p className="text-gray-400 mb-14">Simple, fast, and stress-free</p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-3">{t('home.how.title')}</h2>
+          <p className="text-gray-400 mb-14">{t('home.how.sub')}</p>
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { step: '01', emoji: '💬', title: 'Tell us your needs', desc: "Answer a few quick questions about your family and what kind of help you're looking for." },
-              { step: '02', emoji: '🤝', title: 'We find your match', desc: 'Our AI reviews caregivers based on your schedule, language, budget, and preferences.' },
-              { step: '03', emoji: '✨', title: 'Meet & hire', desc: 'Connect with your top matches, chat, and hire — all in one place.' },
-            ].map(item => (
+            {steps.map(item => (
               <div key={item.step}>
                 <div className="text-xs font-bold text-[#7FB3FF] mb-4 tracking-widest">{item.step}</div>
                 <div className="text-4xl mb-4">{item.emoji}</div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{item.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">{t(item.title)}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">{t(item.desc)}</p>
               </div>
             ))}
           </div>
@@ -128,23 +153,16 @@ export default function Home() {
       <section className="py-20 px-6 bg-[#FAFCFF]">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">Childcare, however you need it</h2>
-            <p className="text-gray-400">From full-time help to the occasional evening</p>
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">{t('home.services.title')}</h2>
+            <p className="text-gray-400">{t('home.services.sub')}</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              { emoji: '👶', label: 'Full-time nanny', desc: 'Weekday care in your home', color: 'bg-blue-50' },
-              { emoji: '🎒', label: 'After school', desc: 'Pickup, homework, dinner', color: 'bg-orange-50' },
-              { emoji: '🌙', label: 'Evenings & weekends', desc: 'Date nights and one-offs', color: 'bg-green-50' },
-              { emoji: '🍼', label: 'Newborn support', desc: 'The first months at home', color: 'bg-purple-50' },
-              { emoji: '🗣', label: 'Bilingual care', desc: 'Mandarin, Cantonese, Spanish', color: 'bg-yellow-50' },
-              { emoji: '☀️', label: 'School breaks', desc: 'Holidays and summer', color: 'bg-pink-50' },
-            ].map(s => (
+            {services.map(s => (
               <button key={s.label} onClick={() => router.push('/onboarding/family')}
                 className={`${s.color} p-6 rounded-2xl text-left hover:scale-[1.02] transition-transform`}>
                 <div className="text-3xl mb-3">{s.emoji}</div>
-                <div className="font-semibold text-gray-900 text-sm">{s.label}</div>
-                <div className="text-xs text-gray-400 mt-1">{s.desc}</div>
+                <div className="font-semibold text-gray-900 text-sm">{t(s.label)}</div>
+                <div className="text-xs text-gray-400 mt-1">{t(s.desc)}</div>
               </button>
             ))}
           </div>
@@ -155,26 +173,22 @@ export default function Home() {
       <section className="py-20 px-6 bg-white">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">How we handle trust</h2>
-            <p className="text-gray-400">What we check, and what we don&rsquo;t. In plain terms.</p>
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">{t('home.trust.title')}</h2>
+            <p className="text-gray-400">{t('home.trust.sub')}</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { emoji: '🪪', title: 'Identity verified', desc: 'Every verified caregiver has had a government ID and a selfie checked by a person on our team.' },
-              { emoji: '🔒', title: 'Documents stay private', desc: 'ID photos are stored privately and are never shown to families. Ever.' },
-              { emoji: '💬', title: 'Coordination on Ruah', desc: 'Messages and the commitments people make stay on the platform, so there is always a record.' },
-            ].map(item => (
+            {trust.map(item => (
               <div key={item.title} className="bg-[#FAFCFF] rounded-2xl p-6">
                 <div className="text-3xl mb-4">{item.emoji}</div>
-                <h3 className="font-bold text-gray-900 mb-2">{item.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+                <h3 className="font-bold text-gray-900 mb-2">{t(item.title)}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">{t(item.desc)}</p>
               </div>
             ))}
           </div>
           <p className="text-center mt-8 text-sm text-gray-500">
-            We don&rsquo;t run background checks.{' '}
+            {t('home.trust.noChecks')}{' '}
             <Link href="/trust" className="text-[#4A90D9] font-medium hover:underline">
-              Here&rsquo;s what that means, and how to arrange your own →
+              {t('home.trust.noChecksLink')}
             </Link>
           </p>
         </div>
@@ -188,16 +202,16 @@ export default function Home() {
               <img src="/ruah-logo.png" alt="Ruah" className="w-20 h-20" />
             </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              Ready to find your perfect match?
+              {t('home.cta.title')}
             </h2>
-            <p className="text-gray-500 mb-8">Get started in minutes. No credit card required.</p>
+            <p className="text-gray-500 mb-8">{t('home.cta.sub')}</p>
             <button onClick={() => router.push('/onboarding/family')}
               className="btn-primary text-white px-10 py-4 rounded-2xl font-semibold text-lg">
-              Find care for my family →
+              {t('home.cta.button')}
             </button>
-            <p className="text-gray-400 text-sm mt-4">Are you a caregiver?{' '}
+            <p className="text-gray-400 text-sm mt-4">{t('home.cta.caregiverPrompt')}{' '}
               <span onClick={() => router.push('/onboarding/caregiver')} className="text-[#7FB3FF] cursor-pointer hover:underline">
-                Join here
+                {t('home.cta.caregiverLink')}
               </span>
             </p>
           </div>
